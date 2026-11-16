@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { evaluate, ValidationError } from '../src/validation';
+import { evaluate, evaluateControl, ValidationError } from '../src/validation';
 import type { AcceptedSwitch, Reference } from '../src/validation';
 
 test('a duplicate event is a false positive, not another correct switch', () => {
@@ -51,6 +51,61 @@ test('an empty event list has null precision and cannot pass', () => {
   expect(report.recall).toBe(0);
   expect(report.passed).toBe(false);
 });
+
+test('a pair run with twenty transitions and no events cannot pass', () => {
+  const report = evaluate(makeReferences(20), [], 1000);
+
+  expect(report.actualSwitchCount).toBe(20);
+  expect(report.countedSwitchCount).toBe(0);
+  expect(report.passed).toBe(false);
+});
+
+test('a control run with exactly thirty seconds and no events passes', () => {
+  const report = evaluateControl([], 1000, 31_000);
+
+  expect(report.durationMs).toBe(30_000);
+  expect(report.countedEventCount).toBe(0);
+  expect(report.passed).toBe(true);
+});
+
+test('a control run shorter than thirty seconds fails', () => {
+  const report = evaluateControl([], 1000, 30_999);
+
+  expect(report.durationMs).toBe(29_999);
+  expect(report.passed).toBe(false);
+});
+
+test('any detector event fails a control run', () => {
+  const report = evaluateControl([{ atMs: 2000, chord: 'A' }], 1000, 31_000);
+
+  expect(report.countedEventCount).toBe(1);
+  expect(report.passed).toBe(false);
+});
+
+const invalidControlInputs: readonly (readonly [
+  string,
+  readonly AcceptedSwitch[],
+  number,
+  number,
+])[] = [
+  ['non-finite start time', [], Number.NaN, 30_000],
+  ['non-finite end time', [], 0, Number.POSITIVE_INFINITY],
+  ['end before start', [], 30_000, 0],
+  ['event before observation range', [{ atMs: 999, chord: 'A' }], 1000, 31_000],
+  ['event after observation range', [{ atMs: 31_001, chord: 'A' }], 1000, 31_000],
+  ['non-finite event time', [{ atMs: Number.NaN, chord: 'A' }], 1000, 31_000],
+  ['unsorted event times', [
+    { atMs: 2000, chord: 'A' }, { atMs: 1500, chord: 'D' },
+  ], 1000, 31_000],
+];
+
+test.each(invalidControlInputs)(
+  'control run with %s throws an explicit validation error',
+  (_label, events, startedAtMs, endedAtMs) => {
+    expect(() => evaluateControl(events, startedAtMs, endedAtMs))
+      .toThrow(ValidationError);
+  },
+);
 
 test('fewer than twenty actual switches cannot pass', () => {
   const references = makeReferences(19);

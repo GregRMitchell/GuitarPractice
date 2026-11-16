@@ -36,6 +36,16 @@ export interface Evaluation {
   readonly passed: boolean;
 }
 
+/** Duration and zero-event gate metrics for a control validation run. */
+export interface ControlEvaluation {
+  /** Observation duration in milliseconds. */
+  readonly durationMs: number;
+  /** Number of detector events observed during the control run. */
+  readonly countedEventCount: number;
+  /** Whether the minimum duration was met with no detector events. */
+  readonly passed: boolean;
+}
+
 /** Invalid independent reference labels, event data, or session timing. */
 export class ValidationError extends Error {
   public constructor(message: string) {
@@ -47,6 +57,7 @@ export class ValidationError extends Error {
 const MINIMUM_SWITCH_COUNT = 20;
 const MINIMUM_PRECISION = 0.9;
 const MINIMUM_RECALL = 0.8;
+const MINIMUM_CONTROL_DURATION_MS = 30_000;
 
 /**
  * Evaluates detector events against independently labeled chord transitions.
@@ -112,6 +123,53 @@ export function evaluate(
     precision,
     recall,
     passed,
+  };
+}
+
+/**
+ * Evaluates a control run, which passes only after at least 30 seconds with no
+ * detector events. Every supplied event is counted; none are filtered.
+ *
+ * @param events Detector events observed during the control run.
+ * @param startedAtMs Inclusive start of the observation range.
+ * @param endedAtMs Inclusive end of the observation range.
+ * @returns Duration, event count, and the zero-event gate result.
+ * @throws {ValidationError} If times are non-finite, out of range, or unordered.
+ */
+export function evaluateControl(
+  events: readonly AcceptedSwitch[],
+  startedAtMs: number,
+  endedAtMs: number,
+): ControlEvaluation {
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(endedAtMs)) {
+    throw new ValidationError('Control observation times must be finite.');
+  }
+  if (endedAtMs < startedAtMs) {
+    throw new ValidationError('endedAtMs must not precede startedAtMs.');
+  }
+
+  let previousEventTime = Number.NEGATIVE_INFINITY;
+  for (const [index, event] of events.entries()) {
+    if (
+      !Number.isFinite(event.atMs)
+      || event.atMs < startedAtMs
+      || event.atMs > endedAtMs
+    ) {
+      throw new ValidationError(
+        `events[${index}].atMs must be within the control observation range.`,
+      );
+    }
+    if (event.atMs < previousEventTime) {
+      throw new ValidationError('Event times must be sorted in nondecreasing order.');
+    }
+    previousEventTime = event.atMs;
+  }
+
+  const durationMs = endedAtMs - startedAtMs;
+  return {
+    durationMs,
+    countedEventCount: events.length,
+    passed: durationMs >= MINIMUM_CONTROL_DURATION_MS && events.length === 0,
   };
 }
 
