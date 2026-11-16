@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+*credential*.json
+*credentials*.json
+*secret*.yaml
+*secret*.yml
