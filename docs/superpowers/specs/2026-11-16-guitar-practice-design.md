@@ -3,6 +3,14 @@
 Date: 2026-11-16
 Status: Written specification approved by the user on 2026-11-16.
 
+Offline sequencing override (2026-11-16): the user explicitly waived the
+recognition gate for offline shell/installability/update safety: “Don't hold the
+offline features, just implement them assuming the detection is working.”
+Implement that already-approved scope now; this does not assert recognition
+accuracy or waive real-device evidence for recognition claims. Routine/history
+and detector changes are not part of this override. See
+`docs/microphone-validation.md` for offline deployment and safe-update behavior.
+
 ## Goal
 
 Build a static-hosted, offline-capable practice companion for beginners who know
@@ -294,7 +302,8 @@ Changing these boundaries requires a separate security decision and user approva
 
 1. Implement and measure the microphone detection gate on real hardware.
 2. Once it passes, build the routine, drill, diagram, and persistence experience.
-3. Add history, backup, offline installation, and safe update behavior.
+3. Add history and backup after their prerequisites; offline installation and
+   safe update behavior are explicitly authorized now by the override above.
 4. Verify the complete Android practice flow and security criteria.
 
 Automated tests cover stable-match counting, first-chord establishment, repeated

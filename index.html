@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#111d2b">
+    <meta name="application-name" content="Chord lab">
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest">
+    <link rel="icon" type="image/png" href="%BASE_URL%icons/chord-192.png">
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/chord-192.png">
     <title>Open chord lab · Guitar practice</title>
   </head>
   <body>
@@ -15,6 +19,22 @@
           No recording, uploads, or automatic saving.</p>
         <span class="badge">Experimental · not an accuracy claim</span>
       </header>
+
+      <section class="panel" aria-labelledby="offline-title">
+        <h2 id="offline-title">Offline &amp; installation</h2>
+        <p id="offline-status" role="status" aria-live="polite">Checking offline support…</p>
+        <p id="network-status" class="hint"></p>
+        <p id="install-status" class="hint">Install from your browser menu.</p>
+        <p id="update-status" class="hint" role="status" aria-live="polite"></p>
+        <div class="actions">
+          <button id="install-app" type="button" disabled>Install app</button>
+          <button id="apply-update" type="button" disabled>Apply update &amp; reload</button>
+        </div>
+        <p class="hint">Updates never reload automatically. Export any report and check your Downloads
+          first: applying an update discards this page’s unsaved report and edits.
+          Apply update is available only when an update is waiting and this attempt is idle or finished.
+          Close other app tabs/windows before applying. Paused attempts must be finished first.</p>
+      </section>
 
       <section class="panel setup" aria-labelledby="setup-title">
         <h2 id="setup-title"><span class="step">01</span> Set up an attempt</h2>
@@ -122,7 +142,7 @@
         </details>
       </section>
       <footer>Leaving or hiding this page releases the microphone and discards an active attempt.
-        Returning never resumes capture. No PWA, accounts, or history.</footer>
+        Returning never resumes capture. Offline app shell only; no accounts or history.</footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -74,6 +74,51 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+test('browsers without service workers remain usable without starting the microphone', async () => {
+  await import('../src/main');
+  expect(get('offline-status').textContent).toMatch(/not supported/);
+  expect(get('install-app').disabled).toBe(true);
+  expect(get('apply-update').disabled).toBe(true);
+  expect(get('start').disabled).toBe(false);
+  expect(start).not.toHaveBeenCalled();
+});
+
+test('update safety spans every unfinished phase and the update lock prevents a new attempt', async () => {
+  const module = await import('../src/pwa');
+  const setup = vi.spyOn(module, 'setupPwa').mockReturnValue({
+    refresh: vi.fn(), install: async () => {}, applyUpdate: async () => {},
+  });
+  start.mockImplementation((_pair, handlers: CaptureHandlers) => {
+    callbacks = handlers;
+    return Promise.resolve({ settings: {}, analysisSampleRate: 48000, stop });
+  });
+  await import('../src/main');
+  const options = setup.mock.calls[0][0];
+  expect(options.safe()).toBe(true);
+  options.lock(true);
+  get('start').click();
+  expect(start).not.toHaveBeenCalled();
+  options.lock(false);
+  get('start').click();
+  expect(get('status').textContent).toContain('Requesting');
+  expect(options.safe()).toBe(false);
+  callbacks.onCalibration({ status: 'calibrating', remainingMs: 2000 });
+  expect(options.safe()).toBe(false);
+  callbacks.onCalibration({ status: 'ready', remainingMs: 0 });
+  await Promise.resolve();
+  expect(options.safe()).toBe(false);
+  get('confirm-first').click();
+  expect(get('status').textContent).toContain('running');
+  expect(options.safe()).toBe(false);
+  get('pause').click();
+  expect(get('status').textContent).toContain('discarded');
+  expect(options.safe()).toBe(false);
+  get('finish').click();
+  expect(options.safe()).toBe(true);
+  options.lock(true);
+  expect(get('start').disabled).toBe(true);
+});
+
 test('trusted start, independent labeling, finish and explicit report download are wired end to end', async () => {
   await import('../src/main');
   get('start').click();

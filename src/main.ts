@@ -6,6 +6,7 @@ import {
 } from './report';
 import { createSession, type RunConfig, type RunMode, type SessionSnapshot } from './session';
 import { evaluate, evaluateControl } from './validation';
+import { setupPwa, type Pwa } from './pwa';
 
 const TIMER_REFRESH_MS = 100;
 const REPORT_URL_LIFETIME_MS = 1000;
@@ -35,6 +36,8 @@ const referenceTimes = element<HTMLTextAreaElement>('reference-times');
 const referenceEvidence = element<HTMLInputElement>('reference-evidence');
 const referenceAttested = element<HTMLInputElement>('reference-attested');
 let timingEditorLoaded = false;
+let updateLocked = false;
+let pwa: Pwa | undefined;
 for (const select of [first, second]) {
   for (const chord of Object.keys(CHORDS)) {
     const option = document.createElement('option');
@@ -120,7 +123,7 @@ function render(): void {
     referenceAttested.checked = false;
     timingEditorLoaded = true;
   }
-  const locked = !['idle', 'finished'].includes(run.phase);
+  const locked = updateLocked || !['idle', 'finished'].includes(run.phase);
   const config = run.phase === 'idle' ? configuration() : run.config;
   const pair: Pair = config.pair;
   const labeling = run.config.mode === 'pair' && run.config.independent;
@@ -203,7 +206,8 @@ function render(): void {
   button('pause', !active);
   button('resume', run.phase !== 'paused');
   button('finish', !active && run.phase !== 'paused');
-  button('export', run.phase !== 'finished' || !reviewed.checked || !device.value.trim() || !browser.value.trim());
+  button('export', updateLocked || run.phase !== 'finished' || !reviewed.checked || !device.value.trim() || !browser.value.trim());
+  pwa?.refresh();
 }
 
 element('start').addEventListener('click', () => {
@@ -260,4 +264,18 @@ window.setInterval(() => {
   const run = session.snapshot();
   if (run.phase === 'running') text('elapsed', `${(run.elapsedMs / 1000).toFixed(1)} s`);
 }, TIMER_REFRESH_MS);
+pwa = setupPwa({
+  safe: () => ['idle', 'finished'].includes(session.snapshot().phase),
+  lock: (locked) => { updateLocked = locked; render(); },
+  changed: (state) => {
+    text('offline-status', state.message);
+    text('network-status', state.network);
+    text('install-status', state.install);
+    text('update-status', state.updateMessage);
+    button('install-app', !state.canInstall);
+    button('apply-update', !state.update);
+  },
+});
+element('install-app').addEventListener('click', () => { void pwa?.install(); });
+element('apply-update').addEventListener('click', () => { void pwa?.applyUpdate(); });
 render();

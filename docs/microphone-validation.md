@@ -4,6 +4,72 @@ Run `npm run dev` for localhost development or `npm run build` for static output
 in `dist`. A phone needs an HTTPS origin; publishing is a separate step.
 Use Android Chrome and standard tuning (E2, A2, D3, G3, B3, E4).
 
+## Offline installation and deployment
+
+On 2026-11-16 the user explicitly waived the recognition gate **for offline
+features only**: “Don't hold the offline features, just implement them assuming
+the detection is working.” This is not recognition evidence or an accuracy claim.
+Routine/history features and the detector algorithm remain outside this change.
+
+The production build includes an Android standalone manifest, padded 192/512 PNG
+maskable icons, and a generated versioned service worker. No microphone permission
+is requested by installation. Use **Install app** when Chrome offers it; otherwise
+use the browser menu's **Add to Home screen / Install app** option. An installed
+standalone window displays installed status; the browser may not expose whether
+another installed app window exists.
+
+Deploy the entire `dist` output together over HTTPS. For subpath hosting, run
+`npm run check` followed by `npx vite build --base /guitar/`.
+Use an absolute same-origin base ending in `/`, and serve it at that exact path.
+Relative/CDN bases are deliberately rejected. Serve `sw.js` as JavaScript with
+revalidation (`Cache-Control: no-cache` recommended), and the manifest as
+`application/manifest+json`. Avoid rewriting missing asset requests to HTML.
+Keep old hashed assets available during deployment where possible. Do not put an
+independently deployed nested app beneath a root worker's navigation scope.
+Vite's development server deliberately does not install a worker.
+
+**Offline ready** means the current page is controlled by its own build's worker
+and every required output was found in that version's cache during a handshake.
+The generated list includes HTML, CSS, all hashed JS, analysis worker,
+AudioWorklet, icons, and manifest; no hashed list is maintained manually.
+Build-generated SHA-256 integrity checks reject corrupt or mixed-deployment
+downloads before a cache can be installed.
+Network status alone never certifies readiness. Initial cache/registration
+failures, unsupported browsers, and insecure origins are displayed explicitly.
+Readiness is checked again on controller/network changes and when returning to
+the page. Browser eviction or clearing site data can remove offline support;
+reconnect and reload when safe to recover. A hard reload can bypass a service worker.
+
+Navigation uses the controlling worker's cached HTML, including in-scope deep
+links. An incomplete/evicted graph may load uncached network HTML to recover
+online; it is never saved as that older version. The version handshake still
+withholds readiness until the page and controlling cached build match.
+Runtime assets come from their versioned graphs, never an HTML fallback.
+No microphone samples, labels, history, downloaded report blobs, arbitrary
+requests, or foreign-origin responses enter these caches.
+
+Registration checks for updates on page load; returning to the page or coming
+online requests another check. Browsers can delay checks. A fully downloaded
+upgrade waits: there is no automatic skip-waiting or reload. **Apply update &
+reload** is enabled only while idle or finished, never starting, calibrating,
+ready, running, or paused (even a discarded paused attempt must be finished).
+The action is explicit consent to discard in-memory report/edits: export first
+and verify the download. It locks starting another attempt during activation.
+The worker refuses explicit activation while any other in-scope app window/tab
+is open, even an idle one. Close those windows and retry, or close all app
+windows to let the browser activate naturally. No other tab is forcibly reloaded.
+Old graph caches are retained while windows exist and removed only during a
+later safe activation with no in-scope windows; unrelated/sibling-scope caches
+are untouched. Retention also protects a window opened during the update race.
+
+Validation: `npm test`, `npm run build`; optional real-browser checks use
+`node tests\browser-offline.mjs` with existing Edge on Windows (override executable
+with `EDGE_PATH` for an existing Chrome installation). The browser check binds
+only to localhost, builds isolated root/subpath outputs, and removes its profile
+and outputs afterward. It exercises unavailable-origin navigation/assets,
+real Worker/AudioWorklet loading, cache failure, installability metadata, and
+cross-tab update safety—not Android installation UX or recognition accuracy.
+
 ## Pair protocol
 
 1. Select two distinct chords. Keep the independent-observer option enabled only
