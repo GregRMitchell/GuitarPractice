@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run check && vite build",
     "test": "vitest run",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit && tsc -p tsconfig.worker.json && tsc -p tsconfig.worklet.json"
   },
   "devDependencies": {
     "typescript": "7.0.2",
