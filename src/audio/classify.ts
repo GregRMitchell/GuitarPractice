@@ -20,9 +20,12 @@ export interface ClassificationOptions {
   readonly minimumMargin?: number;
 }
 
-const MINIMUM_SCORE = 0.58;
-const MINIMUM_MARGIN = 0.14;
-const OUT_OF_CHORD_PENALTY = 0.35;
+/** Default minimum winning profile score. */
+export const MINIMUM_SCORE = 0.58;
+/** Default minimum separation from the runner-up profile. */
+export const MINIMUM_MARGIN = 0.14;
+/** Weight applied to energy outside the candidate chord. */
+export const OUT_OF_CHORD_PENALTY = 0.35;
 
 /**
  * Classify extracted spectral evidence against an active pair, rejecting weak,

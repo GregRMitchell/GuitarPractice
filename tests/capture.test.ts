@@ -77,6 +77,14 @@ test('requests preferred music constraints and routes through a zero-output sink
   await capture.stop();
 });
 
+test('reports the analysis sample rate separately from possibly resampled track settings', async () => {
+  vi.spyOn(environment.tracks[0], 'getSettings').mockReturnValueOnce({ sampleRate: 44100 });
+  const capture = await startCapture(['E', 'Em'], handlers());
+  expect(capture.analysisSampleRate).toBe(48000);
+  expect(capture.settings.sampleRate).toBe(44100);
+  await capture.stop();
+});
+
 test('stop is idempotent and invalidates queued callbacks from both threads', async () => {
   const callbacks = handlers();
   const capture = await startCapture(['E', 'Em'], callbacks);

@@ -26,13 +26,16 @@ export interface CaptureHandlers {
 
 /** One local-only capture session. No PCM is saved, uploaded, or played back. */
 export interface Capture {
+  /** Actual AudioContext/worklet analysis rate, which may differ from the track rate. */
+  readonly analysisSampleRate: number;
   /** Effective device settings, which may differ from requested preferences. */
   readonly settings: MediaTrackSettings;
   /** Invalidate pending callbacks and release every resource; safe to repeat. */
   stop(): Promise<void>;
 }
 
-const MAX_FRAME_AGE_MS = 250;
+/** Maximum accepted age of an analysis frame/result on the shared clock. */
+export const MAX_FRAME_AGE_MS = 250;
 const RENDER_QUANTUM_SAMPLES = 128;
 const WORKER_READY_TIMEOUT_MS = 5000;
 const ANALYSIS_TIMEOUT_MS = 2000;
@@ -219,7 +222,7 @@ export async function startCapture(pair: Pair, handlers: CaptureHandlers): Promi
     if (context.state !== 'running') throw new Error('Audio context is not running.');
     started = true;
     handlers.onCalibration({ status: 'calibrating', remainingMs: CALIBRATION_MS });
-    return { settings: { ...track.getSettings() }, stop };
+    return { analysisSampleRate: context.sampleRate, settings: { ...track.getSettings() }, stop };
   } catch (error: unknown) {
     const failure = asError(error);
     try { await stop(); } catch (closeError: unknown) { handlers.onError(asError(closeError)); }

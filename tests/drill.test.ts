@@ -2,6 +2,17 @@ import { expect, test } from 'vitest';
 import { createDrill } from '../src/drill';
 import type { Observation } from '../src/audio/classify';
 
+test('exposes only the stably established source and clears it on pause', () => {
+  const drill = createDrill(['A', 'D']);
+  drill.resume();
+  observeAt(drill, 'A', [0, 90]);
+  expect(drill.source).toBeNull();
+  observeAt(drill, 'A', [180]);
+  expect(drill.source).toBe('A');
+  drill.pause();
+  expect(drill.source).toBeNull();
+});
+
 function observeAt(
   drill: ReturnType<typeof createDrill>,
   chord: Observation['chord'],

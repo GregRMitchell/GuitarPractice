@@ -2,9 +2,12 @@ import type { Observation } from './audio/classify';
 import type { Chord, Pair } from './chords';
 import type { AcceptedSwitch } from './validation';
 
-const MIN_CONFIDENCE = 0.8;
-const STABLE_DURATION_MS = 180;
-const MAX_EVIDENCE_GAP_MS = 120;
+/** Minimum accepted observation confidence. */
+export const MIN_CONFIDENCE = 0.8;
+/** Continuous evidence needed to establish or switch a chord. */
+export const STABLE_DURATION_MS = 180;
+/** Maximum interval between consecutive evidence frames. */
+export const MAX_EVIDENCE_GAP_MS = 120;
 
 interface Evidence {
   readonly chord: Chord;
@@ -13,6 +16,8 @@ interface Evidence {
 }
 
 export interface Drill {
+  /** Current stable source, or null until established; cleared on pause/resume. */
+  readonly source: Chord | null;
   /**
    * Process an observation.
    * @param observation A chord observation on the monotonic session clock.
@@ -23,6 +28,8 @@ export interface Drill {
   pause(): void;
   /** Start afresh, requiring a stable starting chord without a count. @returns Nothing. */
   resume(): void;
+  /** Clear provisional evidence at a control boundary, retaining the stable source. @returns Nothing. */
+  discardPending(): void;
 }
 
 /**
@@ -37,6 +44,7 @@ export function createDrill(pair: Pair): Drill {
   let latestAtMs = -1;
 
   return {
+    get source(): Chord | null { return source; },
     observe(observation: Observation): AcceptedSwitch | null {
       if (!listening) return null;
 
@@ -84,5 +92,6 @@ export function createDrill(pair: Pair): Drill {
       source = null;
       evidence = null;
     },
+    discardPending(): void { evidence = null; },
   };
 }
