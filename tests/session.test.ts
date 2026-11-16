@@ -197,3 +197,41 @@ test('callbacks from a discarded generation cannot contaminate the explicit rest
   old.onObservation({ atMs: 0, chord: 'A', confidence: 1 });
   expect(h.session.snapshot()).toMatchObject({ phase: 'ready', error: '', prediction: null });
 });
+
+test('a previous capture cleanup rejection cannot contaminate a new attempt', async () => {
+  const h = harness();
+  h.resolve();
+  await Promise.resolve();
+  let rejectStop!: (reason: Error) => void;
+  h.stop.mockImplementationOnce(() => new Promise<void>((_resolve, reject) => {
+    rejectStop = reject;
+  }));
+  h.session.pause('hidden');
+  const starting = h.session.start({ pair: ['A', 'D'], mode: 'pair', independent: true });
+  h.resolve();
+  await starting;
+  h.time(1000); h.session.confirm('A');
+  const current = h.session.snapshot();
+
+  rejectStop(new Error('Old cleanup failed'));
+  await Promise.resolve();
+
+  expect(h.session.snapshot()).toEqual(current);
+  expect(h.session.snapshot()).toMatchObject({ phase: 'running', error: '' });
+});
+
+test.each(['pause', 'finish'] as const)('current %s cleanup errors remain explicit', async (action) => {
+  const h = harness();
+  h.resolve();
+  await Promise.resolve();
+  h.stop.mockRejectedValueOnce(new Error('Current cleanup failed'));
+
+  if (action === 'pause') h.session.pause('hidden');
+  else h.session.finish();
+  await Promise.resolve();
+
+  expect(h.session.snapshot()).toMatchObject({
+    phase: action === 'pause' ? 'paused' : 'finished',
+    error: 'Microphone cleanup failed. Close this page before continuing.',
+  });
+});

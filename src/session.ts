@@ -84,9 +84,11 @@ export function createSession(options: SessionOptions): Session {
   };
   const release = (): void => {
     generation += 1;
+    const token = generation;
     const previous = capture;
     capture = undefined;
     if (previous) void previous.stop().catch(() => {
+      if (token !== generation) return;
       error = 'Microphone cleanup failed. Close this page before continuing.'; notify();
     });
   };
