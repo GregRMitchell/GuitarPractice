@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { serializeReport } from '../src/report';
 import type { SessionSnapshot } from '../src/session';
+import type { Reference } from '../src/validation';
 
 const run: SessionSnapshot = {
   phase: 'finished', config: { pair: ['A', 'D'], mode: 'pair', independent: true },
@@ -16,8 +17,9 @@ test('zero-event independent pair reports misses instead of passing', () => {
     atMs: index * 1000, chord: index % 2 === 0 ? 'A' as const : 'D' as const,
   }));
   const report = JSON.parse(serializeReport({ ...run, references }, metadata));
-  expect(report.version).toBe(1);
-  expect(report.results).toMatchObject({ misses: 20, precision: null, recall: 0, passed: false });
+  expect(report.version).toBe(2);
+  expect(report.rawResults).toMatchObject({ misses: 20, precision: null, recall: 0, passed: false });
+  expect(report.results).toBeNull();
   expect(report.gatePassed).toBe(false);
 });
 
@@ -26,10 +28,117 @@ test('a complete independently labeled pair reports a pass without synthesizing 
     atMs: index * 1000, chord: index % 2 === 0 ? 'A' as const : 'D' as const,
   }));
   const events = references.slice(1).map(({ chord, atMs }) => ({ chord, atMs: atMs + 200 }));
-  const report = JSON.parse(serializeReport({ ...run, references, events }, metadata));
+  const timingReview = {
+    references,
+    evidence: 'Independent timecoded event log',
+    attested: true,
+  };
+  const report = JSON.parse(serializeReport({ ...run, references, events }, metadata, timingReview));
   expect(report.references).toEqual(references);
+  expect(report.rawButtonReferences).toEqual(references);
+  expect(report.reviewedReferences).toEqual(references);
+  expect(report.timingReview).toMatchObject({
+    status: 'independently-verified', evidence: 'Independent timecoded event log', attested: true,
+  });
   expect(report.results).toMatchObject({ precision: 1, recall: 1, passed: true });
   expect(report.gatePassed).toBe(true);
+});
+
+test('button-reaction times remain provisional even when their metrics pass', () => {
+  const references = Array.from({ length: 21 }, (_, index) => ({
+    atMs: index * 1000, chord: index % 2 === 0 ? 'A' as const : 'D' as const,
+  }));
+  const events = references.slice(1).map(({ chord, atMs }) => ({ chord, atMs: atMs + 200 }));
+  const report = JSON.parse(serializeReport({ ...run, references, events }, metadata));
+
+  expect(report.rawResults).toMatchObject({ precision: 1, recall: 1, passed: true });
+  expect(report.results).toBeNull();
+  expect(report.reviewedReferences).toBeNull();
+  expect(report.timingReview.status).toBe('not-certified');
+  expect(report.gatePassed).toBe(false);
+  expect(report.warning).toMatch(/button-reaction/i);
+});
+
+test('independently reviewed times can match a detector event before its button reaction', () => {
+  const references = Array.from({ length: 21 }, (_, index) => ({
+    atMs: index * 1000, chord: index % 2 === 0 ? 'A' as const : 'D' as const,
+  }));
+  const reviewedReferences = references.map(({ chord, atMs }, index) => ({
+    chord, atMs: index === 0 ? 0 : atMs - 200,
+  }));
+  const events = references.slice(1).map(({ chord, atMs }) => ({ chord, atMs: atMs - 100 }));
+  const report = JSON.parse(serializeReport(
+    { ...run, references, events },
+    metadata,
+    { references: reviewedReferences, evidence: 'External timecoded observation', attested: true },
+  ));
+
+  expect(report.rawButtonReferences).toEqual(references);
+  expect(report.reviewedReferences).toEqual(reviewedReferences);
+  expect(report.results).toMatchObject({ precision: 1, recall: 1, passed: true });
+  expect(report.gatePassed).toBe(true);
+});
+
+test('edited times without a fresh attestation remain provisional', () => {
+  const references = Array.from({ length: 21 }, (_, index) => ({
+    atMs: index * 1000, chord: index % 2 === 0 ? 'A' as const : 'D' as const,
+  }));
+  const events = references.slice(1).map(({ chord, atMs }) => ({ chord, atMs: atMs + 200 }));
+  const corrected = references.map(({ chord, atMs }, index) => ({
+    chord, atMs: index === 0 ? 0 : atMs + 100,
+  }));
+  const report = JSON.parse(serializeReport(
+    { ...run, references, events },
+    metadata,
+    { references: corrected, evidence: 'Independent timecode', attested: false },
+  ));
+
+  expect(report.reviewedReferences).toEqual(corrected);
+  expect(report.timingReview.provenance).toBe('user-edited-unverified-times');
+  expect(report.results).toBeNull();
+  expect(report.gatePassed).toBe(false);
+});
+
+const invalidTimingReviews: readonly {
+  description: string;
+  references: readonly Reference[];
+}[] = [
+  {
+    description: 'nonmonotonic times',
+    references: [
+      { atMs: 0, chord: 'A' }, { atMs: 20, chord: 'D' }, { atMs: 10, chord: 'A' },
+    ],
+  },
+  {
+    description: 'a time at the exclusive end',
+    references: [{ atMs: 0, chord: 'A' }, { atMs: 31000, chord: 'D' }],
+  },
+  {
+    description: 'a non-finite time',
+    references: [{ atMs: 0, chord: 'A' }, { atMs: Number.NaN, chord: 'D' }],
+  },
+  {
+    description: 'a changed starting origin',
+    references: [{ atMs: 1, chord: 'A' }],
+  },
+  {
+    description: 'a changed label sequence',
+    references: [{ atMs: 0, chord: 'A' }, { atMs: 10, chord: 'G' }],
+  },
+];
+
+test.each(invalidTimingReviews)('rejects reviewed references with $description', ({ references }) => {
+  expect(() => serializeReport(
+    run,
+    metadata,
+    { references, evidence: 'External timecoded observation', attested: true },
+  )).toThrow(/reference|time|label/i);
+});
+
+test('an attestation cannot certify timing without independent timing evidence', () => {
+  expect(() => serializeReport(run, metadata, {
+    references: run.references, evidence: '', attested: true,
+  })).toThrow(/independent timing evidence/i);
 });
 
 test('control no-events reporting uses actual measured duration and established source', () => {

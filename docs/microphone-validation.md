@@ -20,13 +20,25 @@ Use Android Chrome and standard tuning (E2, A2, D3, G3, B3, E4).
 4. Alternate chords. The observer confirms every actual change, not the
    requested prompt. Detector predictions, confidence and counts stay hidden
    during labeling. At least twenty actual switches are required per pair.
-5. Tap **Finish** to freeze timing and release capture. Review device/browser
-   descriptions and environment notes, check the review box, and explicitly
-   download the JSON report.
+   These button timestamps record observer reaction, not precise playing
+   transitions; ordinary tapping alone is not ground-truth timing.
+5. Tap **Finish** to freeze timing and release capture. In the finished-run
+   timing review, compare each labeled transition with an independent,
+   timecoded observation or reference clock, and enter corrected milliseconds
+   relative to the source. The source remains fixed at 0 ms and chord labels
+   cannot be changed. Describe the independent timing evidence, then attest
+   that times were verified against actual playing—not merely button reactions
+   and not adjusted from detector predictions. Any edit clears the attestation.
+   Without independent timing evidence, the run cannot be certified: it remains
+   provisional even if raw button-time metrics meet the numeric thresholds.
+   Review device/browser descriptions and environment notes, check the context
+   review box, and explicitly download the JSON report.
 
-Prompted chords never create reference labels. Both detector events and observer
-labels use the same monotonic clock, normalized to the independent starting
-confirmation. Observer reaction delay and protocol deviations belong in notes.
+Prompted chords never create reference labels. Detector events and raw button
+timestamps use the same monotonic clock, normalized to the independent starting
+confirmation. Corrected times must retain the actual label sequence and source
+zero and are evaluated by the existing strict half-open interval rule; an event
+at the run end remains excluded. No matching tolerance is widened.
 
 ## Separate controls
 
@@ -49,15 +61,23 @@ new calibration, and new explicit time origin—not continuation of old evidence
 A calibration gap also discards current evidence and requires a fresh origin
 after calibration. A discarded attempt can be finished/exported, but cannot pass.
 
-Report schema version 1 includes selected protocol/pair, algorithm parameters,
-calibration floor, effective track settings and actual analysis sample rate (which
-can differ if the browser resamples), user-reviewed device/browser
-context, independent labels, detector events, elapsed time, and Task 4 metrics.
-Nonfinite numbers block export. No samples or device/group IDs are exported.
-No audio or labels are automatically persisted or transmitted. Avoid personal
-information in notes; downloaded reports are managed by the user.
+Report schema version 2 keeps `rawButtonReferences` (also retained as
+`references`) separately from `reviewedReferences`, and records timing
+provenance, the attestation, and `rawResults`. `results` and `gatePassed` are
+available for a pair only after attested independent timing review; provisional
+button-reaction metrics can never pass. The report also includes selected
+protocol/pair, algorithm parameters, calibration floor, effective track
+settings and actual analysis sample rate (which can differ if the browser
+resamples), user-reviewed device/browser context, detector events, and elapsed
+time. Nonfinite numbers block export. No samples or device/group IDs are
+exported. No audio or labels are automatically persisted or transmitted. Avoid
+personal information in notes; downloaded reports are managed by the user.
 
-A passing pair report requires ≥20 actual switches, precision ≥90%, recall ≥80%.
-Zero events produce undefined precision and cannot pass. All 28 pairs and each
-separate control need real-device evidence; automated tests prove neither
-physical microphone behavior nor recognition accuracy.
+Displayed confidence is an uncalibrated margin-based indicator, not a
+probability of correctness.
+
+A passing pair report requires ≥20 actual switches, precision ≥90%, recall ≥80%,
+and independently verified transition times. Zero events produce undefined
+precision and cannot pass. All 28 pairs and each separate control need
+real-device evidence; automated tests prove neither physical microphone
+behavior nor recognition accuracy.

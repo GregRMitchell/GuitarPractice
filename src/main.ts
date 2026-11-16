@@ -1,7 +1,9 @@
 import './style.css';
 import { startCapture } from './audio/capture';
 import { CHORDS, type Chord, type Pair } from './chords';
-import { DETECTOR_PARAMETERS, effectiveSettings, serializeReport } from './report';
+import {
+  DETECTOR_PARAMETERS, effectiveSettings, serializeReport, type ReferenceTimingReview,
+} from './report';
 import { createSession, type RunConfig, type RunMode, type SessionSnapshot } from './session';
 import { evaluate, evaluateControl } from './validation';
 
@@ -29,6 +31,10 @@ const reviewed = element<HTMLInputElement>('reviewed');
 const device = element<HTMLInputElement>('device');
 const browser = element<HTMLInputElement>('browser');
 const environment = element<HTMLTextAreaElement>('environment');
+const referenceTimes = element<HTMLTextAreaElement>('reference-times');
+const referenceEvidence = element<HTMLInputElement>('reference-evidence');
+const referenceAttested = element<HTMLInputElement>('reference-attested');
+let timingEditorLoaded = false;
 for (const select of [first, second]) {
   for (const chord of Object.keys(CHORDS)) {
     const option = document.createElement('option');
@@ -44,6 +50,23 @@ function configuration(): RunConfig {
   return {
     pair: [first.value as Chord, second.value as Chord],
     mode: mode.value as RunMode, independent: independent.checked,
+  };
+}
+function timingReview(run: SessionSnapshot): ReferenceTimingReview | undefined {
+  if (run.config.mode !== 'pair' || !run.config.independent || !run.references.length) return undefined;
+  const transitionTimes = referenceTimes.value.trim() ? referenceTimes.value.split(/\r?\n/) : [];
+  if (transitionTimes.length !== run.references.length - 1) {
+    throw new Error('Enter exactly one independent time for each labeled transition.');
+  }
+  const references = run.references.map((reference, index) => {
+    if (index === 0) return { ...reference, atMs: 0 };
+    const rawTime = transitionTimes[index - 1]?.trim();
+    return { ...reference, atMs: rawTime ? Number(rawTime) : Number.NaN };
+  });
+  return {
+    references,
+    evidence: referenceEvidence.value,
+    attested: referenceAttested.checked,
   };
 }
 function statusMessage(run: SessionSnapshot): string {
@@ -73,18 +96,30 @@ function resultText(run: SessionSnapshot): string {
   if (!run.config.independent) return `Exploratory only — ${run.events.length} detector switches; no independent accuracy metrics.`;
   if (!run.references.length) return 'No independent starting chord confirmed — no gate evidence.';
   try {
-    const result = evaluate(run.references, run.events, run.elapsedMs);
-    return `${result.passed ? 'Pair metrics passed' : 'Pair metrics not passed'} · `
+    const review = timingReview(run);
+    const independentlyVerified = review?.attested && review.evidence.trim();
+    const references = independentlyVerified ? review.references : run.references;
+    const result = evaluate(references, run.events, run.elapsedMs);
+    return `${independentlyVerified
+      ? result.passed ? 'Reviewed pair metrics passed' : 'Reviewed pair metrics not passed'
+      : `Provisional button-reaction metrics${result.passed ? ' meet thresholds' : ' do not meet thresholds'} — cannot pass`} · `
       + `${result.actualSwitchCount} actual / ${result.countedSwitchCount} detected · `
       + `precision ${result.precision === null ? 'undefined (no events)' : `${(result.precision * 100).toFixed(1)}%`} · `
-      + `recall ${(result.recall * 100).toFixed(1)}%. Not an overall release gate.`;
+      + `recall ${(result.recall * 100).toFixed(1)}%. Not an overall release gate.`
+      + (independentlyVerified ? '' : ' Verify times with independent timing evidence to certify.');
   } catch {
-    return 'Timing is incomplete. No valid pair gate result; inspect the run before export.';
+    return 'Reference timing is invalid or incomplete. Cannot certify; check transition times before export.';
   }
 }
 
 function render(): void {
   const run = session.snapshot();
+  if (run.phase === 'finished' && !timingEditorLoaded) {
+    referenceTimes.value = run.references.slice(1).map(({ atMs }) => String(atMs)).join('\n');
+    referenceEvidence.value = '';
+    referenceAttested.checked = false;
+    timingEditorLoaded = true;
+  }
   const locked = !['idle', 'finished'].includes(run.phase);
   const config = run.phase === 'idle' ? configuration() : run.config;
   const pair: Pair = config.pair;
@@ -118,6 +153,27 @@ function render(): void {
       ? 'Observer: confirm the starting chord actually heard, then label every real change. Prompts never create labels.'
       : 'Exploratory practice only. Tap Begin, establish the starting chord, then alternate. No accuracy or gate claim.');
   element('observer').hidden = !config.independent || control;
+  element('reference-review').hidden = run.phase !== 'finished'
+    || !labeling || run.discarded || run.references.length === 0;
+  text('reference-labels', run.references.slice(1)
+    .map(({ chord }, index) => `${index + 1}: ${chord}`).join(' · ')
+    || 'No transitions were labeled.');
+  element<HTMLButtonElement>('reference-attested').disabled = !referenceEvidence.value.trim();
+  let validTimingReview = false;
+  try {
+    const review = timingReview(run);
+    if (review) {
+      evaluate(review.references, [], run.elapsedMs);
+      validTimingReview = true;
+    }
+  } catch {
+    validTimingReview = false;
+  }
+  text('reference-status', referenceAttested.checked && referenceEvidence.value.trim() && validTimingReview
+    ? 'Attestation recorded. Exported metrics will use these reviewed times.'
+    : referenceAttested.checked && !validTimingReview
+      ? 'Timing entries are invalid or incomplete; cannot certify.'
+      : 'Cannot certify: independent timing evidence and a fresh attestation are required.');
   for (const [index, id] of ['confirm-first', 'confirm-second'].entries()) {
     text(id, `Actual ${pair[index]} · key ${index + 1}`);
     button(id, !['ready', 'running'].includes(run.phase)
@@ -130,7 +186,7 @@ function render(): void {
     : 'Begin exploratory observation');
   button('begin', run.phase !== 'ready' || (control && run.source !== pair[0]));
   text('prediction', hidePredictions ? 'Detector predictions and confidence hidden during independent labeling.'
-    : run.prediction ? `Detector: ${run.prediction.chord ?? 'uncertain / rejected'} · confidence ${(run.prediction.confidence * 100).toFixed(0)}%`
+    : run.prediction ? `Detector: ${run.prediction.chord ?? 'uncertain / rejected'} · uncalibrated margin-based indicator ${(run.prediction.confidence * 100).toFixed(0)}%`
       : `Detector: ${run.source ? `stable source ${run.source}` : 'waiting for a stable source'}.`);
   element<HTMLMeterElement>('level').value = run.level;
   text('level-text', `${run.level.toFixed(4)} RMS`);
@@ -152,9 +208,13 @@ function render(): void {
 
 element('start').addEventListener('click', () => {
   text('export-status', '');
+  timingEditorLoaded = false;
   void session.start(configuration());
 });
-element('resume').addEventListener('click', () => { void session.start(session.snapshot().config); });
+element('resume').addEventListener('click', () => {
+  timingEditorLoaded = false;
+  void session.start(session.snapshot().config);
+});
 element('pause').addEventListener('click', () => session.pause('manual pause'));
 element('finish').addEventListener('click', () => session.finish());
 element('begin').addEventListener('click', () => session.begin());
@@ -173,14 +233,19 @@ for (const input of [first, second, mode, independent, reviewed]) input.addEvent
 for (const input of [device, browser, environment]) input.addEventListener('input', () => {
   reviewed.checked = false; render();
 });
+for (const input of [referenceTimes, referenceEvidence]) input.addEventListener('input', () => {
+  referenceAttested.checked = false;
+  render();
+});
+referenceAttested.addEventListener('change', render);
 element('export').addEventListener('click', () => {
   try {
     const json = serializeReport(session.snapshot(), {
       device: device.value, browser: browser.value, environment: environment.value, reviewed: reviewed.checked,
-    });
+    }, timingReview(session.snapshot()));
     const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
     const link = document.createElement('a');
-    link.href = url; link.download = `chord-validation-v1-${Date.now()}.json`;
+    link.href = url; link.download = `chord-validation-v2-${Date.now()}.json`;
     document.body.append(link); link.click(); link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), REPORT_URL_LIFETIME_MS);
     text('export-status', 'Report download requested. No audio included; check your Downloads folder.');

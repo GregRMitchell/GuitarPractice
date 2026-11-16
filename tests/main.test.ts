@@ -101,13 +101,43 @@ test('trusted start, independent labeling, finish and explicit report download a
   expect(blobs).toHaveLength(1);
   const report = JSON.parse(await blobs[0].text());
   expect(report.references).toEqual([{ chord: 'A', atMs: 0 }, { chord: 'D', atMs: 1000 }]);
-  expect(report.results).toMatchObject({ misses: 1, passed: false });
+  expect(report.rawResults).toMatchObject({ misses: 1, passed: false });
+  expect(report.results).toBeNull();
   expect(report.analysisSampleRate).toBe(48000);
   expect(report.settings.sampleRate).toBe(44100);
   expect(screen.body.children.at(-1)?.clicked).toBe(true);
-  expect(screen.body.children.at(-1)?.download).toMatch(/^chord-validation-v1-/);
+  expect(screen.body.children.at(-1)?.download).toMatch(/^chord-validation-v2-/);
   timers.forEach((callback) => callback());
   expect(revoke).toHaveBeenCalledWith('blob:local-report');
+});
+
+test('editing independent-reference timing clears its attestation', async () => {
+  await import('../src/main');
+  get('start').click();
+  callbacks.onCalibration({ status: 'ready', remainingMs: 0 });
+  await Promise.resolve();
+  get('confirm-first').click();
+  now = 2000;
+  get('confirm-second').click();
+  now = 3000;
+  get('finish').click();
+
+  get('reference-times').value = '0\n900';
+  get('reference-evidence').value = 'Independent timecoded event log';
+  get('reference-attested').checked = true;
+  get('reference-attested').dispatchEvent(new Event('change'));
+  expect(get('reference-attested').checked).toBe(true);
+
+  get('reference-times').value = '0\n850';
+  get('reference-times').dispatchEvent(new Event('input'));
+  expect(get('reference-attested').checked).toBe(false);
+  expect(get('reference-status').textContent).toMatch(/cannot certify/i);
+
+  get('reference-attested').checked = true;
+  get('reference-attested').dispatchEvent(new Event('change'));
+  get('reference-evidence').value = 'Second independent clock';
+  get('reference-evidence').dispatchEvent(new Event('input'));
+  expect(get('reference-attested').checked).toBe(false);
 });
 
 test('hidden page discards capture and returning visible cannot restart it without a tap', async () => {

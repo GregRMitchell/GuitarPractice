@@ -71,6 +71,25 @@
           </div>
           <p class="hint">Predictions and detector counts stay hidden while labeling to reduce bias.</p>
         </div>
+        <div id="reference-review" class="observer" hidden>
+          <h3>Finished-run reference timing review</h3>
+          <p>Button times below are observer reaction times, not precise playing-transition times.
+            Ordinary tapping alone cannot certify timing. Use an independent timecoded observation
+            or reference clock; replace the initial button times with independently verified times.
+            Do not use detector predictions to adjust labels or times.</p>
+          <p>Source <strong id="reference-source">0 ms</strong> is fixed. Transition labels in order:
+            <strong id="reference-labels"></strong></p>
+          <label>Independently verified transition times (milliseconds after source; one per label)
+            <textarea id="reference-times" rows="5" spellcheck="false"></textarea>
+          </label>
+          <label>Independent timing evidence description
+            <input id="reference-evidence" type="text" maxlength="500"
+              placeholder="External timecoded observation or independent reference clock"></label>
+          <label class="check"><input id="reference-attested" type="checkbox" disabled>
+            <span>I independently verified these times against actual playing. They are not merely
+              button-reaction times and were not adjusted from detector predictions.</span></label>
+          <p id="reference-status" class="hint" role="status" aria-live="polite"></p>
+        </div>
         <button id="begin" type="button" class="primary wide" hidden disabled>Begin observation</button>
         <p id="prediction">Detector: waiting for microphone.</p>
         <label class="meter-label" for="level">Microphone input <span id="level-text">0.0000 RMS</span></label>
@@ -82,7 +101,8 @@
       <section class="panel" aria-labelledby="export-title">
         <h2 id="export-title"><span class="step">03</span> Review &amp; export</h2>
         <p>Nothing is saved automatically. Export before starting another attempt.
-          Reports contain metadata, independent labels, detector events and results—never audio.</p>
+          Reports retain raw button times, reviewed reference times, detector events, and provenance—never audio.
+          Pair timing without independent verification is provisional and cannot pass.</p>
         <label>Device description<input id="device" type="text" maxlength="300"
           placeholder="e.g. Pixel 8, built-in microphone" autocomplete="off"></label>
         <label>Browser / version<input id="browser" type="text" maxlength="600" autocomplete="off"></label>
@@ -95,7 +115,8 @@
         <details><summary>Effective capture settings</summary><pre id="settings">Not available until capture starts.</pre></details>
         <details><summary>Detector parameters &amp; gate</summary>
           <pre id="parameters"></pre>
-          <p>Every one of 28 pairs needs at least 20 actual switches, precision ≥90% and recall ≥80%.
+          <p>Confidence is an uncalibrated margin-based indicator, not a probability.
+            Every one of 28 pairs needs at least 20 actual switches, precision ≥90% and recall ≥80%.
             Each separate control needs ≥30 seconds with zero detector switches.
             One passing report is not an overall release gate.</p>
         </details>
