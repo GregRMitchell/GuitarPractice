@@ -11,6 +11,8 @@ export interface RunConfig {
   readonly pair: Pair;
   readonly mode: RunMode;
   readonly independent: boolean;
+  /** Optional practice deadline measured from the uninterrupted timing origin. */
+  readonly durationMs?: number;
 }
 /** Metadata and labels only: never retains PCM or an observation history. */
 export interface SessionSnapshot {
@@ -44,6 +46,8 @@ export interface Session {
   pause(reason: string): void;
   /** Freeze the current uninterrupted run and release capture. */
   finish(): void;
+  /** Reconcile an optional round deadline with the monotonic clock. Returns nothing. */
+  tick(): void;
   /** Confirm the actual chord now; first confirmation defines time zero. Returns nothing. */
   confirm(chord: Chord): void;
   /** Begin exploratory timing or a source-established control; never generates pair labels. */
@@ -105,6 +109,17 @@ export function createSession(options: SessionOptions): Session {
     origin = options.now(); elapsedMs = 0; events = []; references = [];
     prediction = null; discarded = false; phase = 'running';
   };
+  const elapsed = (): number => Math.min(config.durationMs ?? Infinity,
+    origin === null ? 0 : Math.max(0, options.now() - origin));
+  const finish = (): void => {
+    if (phase === 'idle' || phase === 'finished') return;
+    elapsedMs = elapsed();
+    release(); drill.pause(); level = 0; phase = 'finished'; notify();
+  };
+  const tick = (): void => {
+    if (phase === 'running' && config.durationMs !== undefined
+      && elapsed() >= config.durationMs) finish();
+  };
   return {
     start(next: RunConfig): Promise<void> {
       if (!['idle', 'paused', 'finished'].includes(phase)) return Promise.resolve();
@@ -139,6 +154,9 @@ export function createSession(options: SessionOptions): Session {
         onCalibration: (value) => {
           if (!active()) return;
           if (value.status === 'calibrating') {
+            if (phase === 'running' && config.durationMs !== undefined) {
+              pause('capture gap'); return;
+            }
             if (phase === 'running' || phase === 'ready') discard();
             phase = 'calibrating';
           } else if (phase === 'starting' || phase === 'calibrating') {
@@ -147,6 +165,7 @@ export function createSession(options: SessionOptions): Session {
           calibration = { ...value }; notify();
         },
         onObservation: (value) => {
+          if (active()) tick();
           if (!active() || calibration?.status !== 'ready'
             || (phase !== 'ready' && phase !== 'running')
             || value.atMs > options.now()
@@ -175,11 +194,8 @@ export function createSession(options: SessionOptions): Session {
       }
     },
     pause,
-    finish(): void {
-      if (phase === 'idle' || phase === 'finished') return;
-      elapsedMs = origin === null ? 0 : Math.max(0, options.now() - origin);
-      release(); drill.pause(); level = 0; phase = 'finished'; notify();
-    },
+    finish,
+    tick,
     confirm(chord: Chord): void {
       if (config.mode !== 'pair' || !config.independent || !config.pair.includes(chord)) return;
       if (phase === 'ready') {
@@ -208,7 +224,7 @@ export function createSession(options: SessionOptions): Session {
     snapshot(): SessionSnapshot {
       return {
         phase, config: { ...config, pair: [...config.pair] }, discarded, discardCount,
-        elapsedMs: phase === 'running' && origin !== null ? Math.max(0, options.now() - origin) : elapsedMs,
+        elapsedMs: phase === 'running' ? elapsed() : elapsedMs,
         references: references.map((value) => ({ ...value })),
         events: events.map((value) => ({ ...value })), calibration: calibration && { ...calibration },
         settings: { ...settings }, analysisSampleRate, level, prediction: prediction && { ...prediction },

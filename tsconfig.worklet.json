@@ -4,5 +4,5 @@
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["src/audio/capture.worklet.ts"]
+  "include": ["src/audio/capture.worklet.ts", "src/rhythm/onset.worklet.ts"]
 }

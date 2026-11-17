@@ -1,4 +1,4 @@
-import { MINIMUM_MARGIN, MINIMUM_SCORE, OUT_OF_CHORD_PENALTY } from './audio/classify';
+import { MINIMUM_CHORD_TONE_ENERGY, MINIMUM_MARGIN, MINIMUM_SCORE, OCTAVE_HARMONIC_ALLOWANCE } from './audio/classify';
 import { MAX_FRAME_AGE_MS } from './audio/capture';
 import { CALIBRATION_MS, FRAME_SAMPLES, HOP_SAMPLES } from './audio/capture-protocol';
 import { MAX_EVIDENCE_GAP_MS, MIN_CONFIDENCE, STABLE_DURATION_MS } from './drill';
@@ -27,7 +27,9 @@ export interface ReferenceTimingReview {
 export const DETECTOR_PARAMETERS = Object.freeze({
   frameSamples: FRAME_SAMPLES, hopSamples: HOP_SAMPLES, calibrationMs: CALIBRATION_MS,
   minimumScore: MINIMUM_SCORE, minimumMargin: MINIMUM_MARGIN,
-  outOfChordPenalty: OUT_OF_CHORD_PENALTY, minimumConfidence: MIN_CONFIDENCE,
+  scoring: 'voicing-cosine-distinctive-notes', octaveHarmonicAllowance: OCTAVE_HARMONIC_ALLOWANCE,
+  minimumChordToneEnergy: MINIMUM_CHORD_TONE_ENERGY,
+  minimumConfidence: MIN_CONFIDENCE,
   stableDurationMs: STABLE_DURATION_MS, maximumEvidenceGapMs: MAX_EVIDENCE_GAP_MS,
   maximumFrameAgeMs: MAX_FRAME_AGE_MS,
 });
@@ -112,7 +114,7 @@ export function serializeReport(
       && (!control || run.sourceAtStart === run.config.pair[0])
       && run.analysisSampleRate !== null && run.analysisSampleRate > 0,
     error: run.error,
-    scope: 'One attempt only; not an overall 28-pair release gate or real-device accuracy claim.',
+    scope: 'One attempt only; not an overall supported-pair release gate or real-device accuracy claim.',
   };
   assertFinite(report);
   return JSON.stringify(report, null, 2);

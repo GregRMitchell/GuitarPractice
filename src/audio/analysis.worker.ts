@@ -2,6 +2,7 @@ import { classify } from './classify';
 import { extractFeatures } from './features';
 import { CALIBRATION_MS } from './capture-protocol';
 import type { AnalysisReply, AnalysisRequest, Calibration } from './capture-protocol';
+import { estimatePitch } from '../coach/pitch';
 
 interface AnalysisEndpoint {
   onmessage: ((event: MessageEvent<AnalysisRequest>) => void) | null;
@@ -51,6 +52,13 @@ endpoint.onmessage = ({ data }: MessageEvent<AnalysisRequest>): void => {
       type: 'result', id: frame.id, rms: features.rms,
       calibration: { status: 'ready', remainingMs: 0, noiseFloorRms },
       observation: classify(features, pair, atMs),
+      ...(data.includeAnalysis ? {
+        analysis: {
+          features,
+          pitch: estimatePitch(frame.samples, frame.sampleRate, noiseFloorRms),
+          clipped: frame.samples.some((sample) => Math.abs(sample) >= 0.99),
+        },
+      } : {}),
     });
   } catch (error: unknown) {
     resetCalibration();

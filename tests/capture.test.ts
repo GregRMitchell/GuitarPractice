@@ -7,7 +7,7 @@ import { browser, FakeContext, FakeWorker, FakeWorklet } from './capture-fakes';
 let environment: ReturnType<typeof browser>;
 let nowMs: number;
 type HandlerSpies = {
-  [Key in Exclude<keyof CaptureHandlers, 'now'>]: Mock<CaptureHandlers[Key]>;
+  [Key in Exclude<keyof CaptureHandlers, 'now' | 'onAnalysis'>]: Mock<CaptureHandlers[Key]>;
 } & { now: () => number };
 const handlers = (): HandlerSpies => ({
   onObservation: vi.fn(), onLevel: vi.fn(), onError: vi.fn(),
@@ -128,6 +128,47 @@ test('translates audio timestamps onto caller clock, permits only one in-flight 
   expect(callbacks.onObservation).toHaveBeenCalledOnce();
   frame(4, 10.2);
   expect(worker.sent).toHaveLength(2);
+  await capture.stop();
+});
+
+test('optional local analysis is requested and delivered only for fresh post-calibration frames', async () => {
+  const callbacks = { ...handlers(), onAnalysis: vi.fn() };
+  const capture = await startCapture(['E', 'Em'], callbacks);
+  frame();
+  const worker = FakeWorker.instances[0];
+  expect(worker.sent[0]).toMatchObject({ includeAnalysis: true });
+  const analysis = { features: { rms: 0.1 }, pitch: null, clipped: false };
+  worker.emit({ ...result(), analysis });
+  expect(callbacks.onAnalysis).toHaveBeenCalledWith({ ...analysis, atMs: 1000 });
+  frame(2);
+  nowMs = 1400;
+  worker.emit({ ...result(2), analysis });
+  expect(callbacks.onAnalysis).toHaveBeenCalledOnce();
+  await capture.stop();
+});
+
+test('re-anchors once when the audio clock slips behind the caller clock but frames stay fresh', async () => {
+  const callbacks = handlers();
+  const capture = await startCapture(['E', 'Em'], callbacks);
+  const context = FakeContext.instances[0];
+  const worker = FakeWorker.instances[0];
+  context.currentTime = 10.1;
+  nowMs = 1400;
+  frame(1, 10.1);
+  expect(worker.sent).toHaveLength(1);
+  expect(worker.sent[0]).toMatchObject({ atMs: 1400 });
+  worker.emit(result(1, 1400));
+  expect(callbacks.onObservation).toHaveBeenCalledWith({ atMs: 1400, chord: 'E', confidence: 1 });
+  context.currentTime = 10.2;
+  nowMs = 1500;
+  frame(2, 10.2);
+  expect(worker.sent[1]).toMatchObject({ atMs: 1500 });
+  worker.emit(result(2, 1500));
+  context.currentTime = 10.6;
+  nowMs = 1900;
+  frame(3, 10.3);
+  expect(worker.sent).toHaveLength(2);
+  expect(FakeWorklet.instances[0].port.sent).toContainEqual({ type: 'ack', id: 3 });
   await capture.stop();
 });
 

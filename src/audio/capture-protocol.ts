@@ -1,5 +1,23 @@
 import type { Pair } from '../chords';
 import type { Observation } from './classify';
+import type { Features } from './features';
+import type { PitchEstimate } from '../coach/pitch';
+
+/** Ephemeral local analysis; no PCM crosses back to the main thread. */
+export interface LocalAnalysis {
+  /** Spectral evidence and calibrated noise floor. */
+  readonly features: Features;
+  /** Isolated-note periodicity estimate, not string identity. */
+  readonly pitch: PitchEstimate | null;
+  /** Whether at least one sample approached full scale. */
+  readonly clipped: boolean;
+}
+
+/** A fresh local analysis on the caller's monotonic clock. */
+export interface TimedAnalysis extends LocalAnalysis {
+  /** Frame end time in milliseconds. */
+  readonly atMs: number;
+}
 
 /** Quiet-room calibration progress; ready does not imply recognition accuracy. */
 export interface Calibration {
@@ -23,6 +41,8 @@ export interface AnalysisRequest {
   readonly frame: AudioFrame;
   readonly pair: Pair;
   readonly atMs: number;
+  /** Request local coaching summaries, computed only when needed. */
+  readonly includeAnalysis?: boolean;
 }
 
 /** Every analyzed frame completes with a result or an explicit failure. */
@@ -35,6 +55,7 @@ export type AnalysisReply =
     readonly rms: number;
     readonly calibration: Calibration;
     readonly observation?: Observation;
+    readonly analysis?: LocalAnalysis;
   };
 
 /** Releases the worklet's single outstanding transfer slot. */

@@ -175,6 +175,10 @@ test('export allowlists metadata, settings, labels and events, excluding audio a
   expect(text).not.toContain('samples');
   expect(text).not.toContain('private');
   expect(JSON.parse(text).parameters).toHaveProperty('calibrationMs', 2000);
+  expect(JSON.parse(text).parameters).toMatchObject({
+    scoring: 'voicing-cosine-distinctive-notes', octaveHarmonicAllowance: 1, minimumChordToneEnergy: 0.14,
+  });
+  expect(JSON.parse(text).parameters).not.toHaveProperty('outOfChordPenalty');
 });
 
 test('export requires a finished run and reviewed device/browser description', () => {

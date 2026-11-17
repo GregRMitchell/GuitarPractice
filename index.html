@@ -4,84 +4,108 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#111d2b">
-    <meta name="application-name" content="Chord lab">
+    <meta name="application-name" content="Chord Play">
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest">
     <link rel="icon" type="image/png" href="%BASE_URL%icons/chord-192.png">
     <link rel="apple-touch-icon" href="%BASE_URL%icons/chord-192.png">
-    <title>Open chord lab · Guitar practice</title>
+    <title>Chord Play · Guitar practice</title>
   </head>
   <body>
     <main>
       <header class="masthead">
-        <p class="eyebrow">GUITAR PRACTICE / RECOGNITION LAB</p>
-        <h1>Small switches.<br>Honest evidence.</h1>
-        <p class="lede">A local microphone check for eight open chords. Standard tuning.
-          No recording, uploads, or automatic saving.</p>
-        <span class="badge">Experimental · not an accuracy claim</span>
+        <h1>Chord<span>Play</span></h1>
+        <span class="header-note">A little practice. A little progress.</span>
       </header>
-
-      <section class="panel" aria-labelledby="offline-title">
-        <h2 id="offline-title">Offline &amp; installation</h2>
-        <p id="offline-status" role="status" aria-live="polite">Checking offline support…</p>
-        <p id="network-status" class="hint"></p>
-        <p id="install-status" class="hint">Install from your browser menu.</p>
-        <p id="update-status" class="hint" role="status" aria-live="polite"></p>
-        <div class="actions">
-          <button id="install-app" type="button" disabled>Install app</button>
-          <button id="apply-update" type="button" disabled>Apply update &amp; reload</button>
+      <nav class="page-nav" aria-label="Main navigation">
+        <button id="nav-practice" type="button" aria-current="page">Practice</button>
+        <button id="nav-history" type="button">History</button>
+      </nav>
+      <p id="history-navigation-note" class="hint" role="status"></p>
+      <div class="storage-notice">
+        <p id="history-storage" class="hint" role="status">Opening local history…</p>
+        <p id="history-save" class="hint" role="status" aria-live="polite"></p>
+        <button id="history-retry" type="button" hidden>Retry local storage / save</button>
+      </div>
+      <div id="practice-page">
+      <div class="practice-modes" role="group" aria-label="Practice mode">
+        <button id="practice-switches" type="button" aria-pressed="true">Chord switches</button>
+        <button id="practice-coach" type="button" aria-pressed="false">Learn a chord</button>
+        <button id="practice-rhythm" type="button" aria-pressed="false">Strumming</button>
+        <button id="practice-progression" type="button" aria-pressed="false">Play along</button>
+      </div>
+      <div id="switch-practice">
+      <section class="panel live" aria-labelledby="live-title">
+        <div class="section-head">
+          <h2 id="live-title">Your one-minute jam</h2>
+          <span id="evidence" class="badge" hidden></span>
         </div>
-        <p class="hint">Updates never reload automatically. Export any report and check your Downloads
-          first: applying an update discards this page’s unsaved report and edits.
-          Apply update is available only when an update is waiting and this attempt is idle or finished.
-          Close other app tabs/windows before applying. Paused attempts must be finished first.</p>
-      </section>
-
-      <section class="panel setup" aria-labelledby="setup-title">
-        <h2 id="setup-title"><span class="step">01</span> Set up an attempt</h2>
         <fieldset id="configuration">
-          <legend class="sr-only">Run configuration</legend>
+          <legend class="sr-only">Choose your practice chords</legend>
           <div class="columns">
             <label>Starting chord<select id="first" aria-label="Starting chord"></select></label>
-            <label>Other chord<select id="second" aria-label="Other chord"></select></label>
+            <label>Switch to<select id="second" aria-label="Other chord"></select></label>
           </div>
+        </fieldset>
+        <div class="actions start-actions">
+          <button id="start" type="button" class="primary">Start practice</button>
+          <button id="resume" type="button" disabled>Restart · fresh minute</button>
+        </div>
+        <p id="status" role="status" aria-live="polite">Pick two chords. One minute. Let’s play!</p>
+        <p id="error" class="error" role="alert" hidden></p>
+        <div class="chord-grid">
+          <div>
+            <p class="eyebrow">CURRENT CHORD</p><p id="current" class="chord">A</p>
+            <div id="current-diagram"></div>
+          </div>
+          <div>
+            <p class="eyebrow">UP NEXT</p><p id="next" class="chord accent">D</p>
+            <div id="next-diagram"></div>
+          </div>
+        </div>
+        <p id="diagram-key" class="hint diagram-key">Standard tuning · × skip string · ○ open string · ● press fret<br>Strings run low E → high E. Top line is the nut.</p>
+        <div class="stats">
+          <div><span id="count" class="stat">0</span><span id="count-label">confirmed switches</span></div>
+          <div id="challenge">
+            <span class="stat"><span id="countdown">60</span><span class="unit"> s</span></span>
+            <label for="round-progress" class="timer-label">Round progress</label>
+            <progress id="round-progress" max="1" value="0" aria-label="Round progress"></progress>
+          </div>
+          <div id="elapsed-stat" hidden><span id="elapsed" class="stat">0.0 s</span><span id="duration-label">uninterrupted timing</span></div>
+        </div>
+        <p id="practice-feedback" class="encouragement" role="status" aria-live="polite">Find your first switch. Clean changes, easy pace.</p>
+        <p id="instructions" class="instruction">Strum, switch, repeat.</p>
+        <p id="practice-result" class="result" aria-live="polite"></p>
+        <div class="actions secondary-actions">
+          <button id="pause" type="button" disabled>Stop &amp; reset</button>
+          <button id="finish" type="button" disabled>End round</button>
+        </div>
+        <p class="hint privacy-note">Microphone stays on this device. No recordings or uploads.
+          Confirmed switches are detector estimates, not an accuracy score.
+          Hiding this page resets the round; return and tap Restart to play again.</p>
+      </section>
+
+      <details id="advanced" class="panel">
+        <summary>Advanced · microphone &amp; validation tools</summary>
+        <p class="hint">Practice needs no observer or report. These optional tools test the detector,
+          not your playing. Use HTTPS or localhost in a supported browser.</p>
+        <label class="check"><input id="diagnostics" type="checkbox">
+          <span>Use diagnostic protocol instead of the one-minute practice round</span></label>
+        <fieldset id="validation-configuration">
+          <legend class="sr-only">Diagnostic protocol</legend>
           <label>Validation protocol
             <select id="mode">
-              <option value="pair">Pair · independently labeled switches</option>
+              <option value="pair">Pair · switches</option>
               <option value="silence">Control · silence (30 seconds)</option>
               <option value="speech">Control · ordinary speech (30 seconds)</option>
               <option value="same-chord">Control · repeated same-chord strums (30 seconds)</option>
             </select>
           </label>
-          <label class="check"><input id="independent" type="checkbox" checked>
+          <label class="check"><input id="independent" type="checkbox">
             <span>An independent observer will label the actual played chords,
               without using detector predictions.</span>
           </label>
         </fieldset>
-        <p class="hint">Use HTTPS or localhost in Chrome. Find a quiet room and stay quiet
-          for the first 2 seconds after tapping Start. Calibration is not an accuracy test.</p>
-        <div class="actions">
-          <button id="start" type="button" class="primary">Start microphone</button>
-          <button id="pause" type="button" disabled>Pause &amp; discard</button>
-          <button id="resume" type="button" disabled>Resume as new attempt</button>
-          <button id="finish" type="button" disabled>Finish</button>
-        </div>
-      </section>
-
-      <section class="panel live" aria-labelledby="live-title">
-        <div class="section-head"><h2 id="live-title"><span class="step">02</span> Play &amp; observe</h2>
-          <span id="evidence" class="badge">Independent observer</span></div>
-        <p id="status" role="status" aria-live="polite">Ready to start.</p>
-        <p id="error" class="error" role="alert" hidden></p>
-        <div class="chord-grid">
-          <div><p class="eyebrow">START / LAST ACTUAL</p><p id="current" class="chord">A</p></div>
-          <div><p class="eyebrow">NEXT CHORD</p><p id="next" class="chord accent">D</p></div>
-        </div>
-        <div class="stats">
-          <div><span id="count" class="stat">0</span><span id="count-label">actual switches labeled</span></div>
-          <div><span id="elapsed" class="stat">0.0 s</span><span id="duration-label">uninterrupted timing</span></div>
-        </div>
-        <p id="instructions" class="instruction"></p>
-        <div id="observer" class="observer">
+        <div id="observer" class="observer" hidden>
           <p>Observer only: confirm what was actually played, not the prompt.
             First confirmation starts time zero. Then label each real change.
             At least 20 switches per pair.</p>
@@ -91,6 +115,13 @@
           </div>
           <p class="hint">Predictions and detector counts stay hidden while labeling to reduce bias.</p>
         </div>
+        <button id="begin" type="button" class="primary wide" hidden disabled>Begin observation</button>
+        <p id="prediction">Detector: waiting for microphone.</p>
+        <label class="meter-label" for="level">Microphone input <span id="level-text">0.0000 RMS</span></label>
+        <meter id="level" min="0" max="0.2" value="0">0</meter>
+        <p id="calibration" class="hint">Calibration: not started.</p>
+        <p id="results" class="result" aria-live="polite"></p>
+
         <div id="reference-review" class="observer" hidden>
           <h3>Finished-run reference timing review</h3>
           <p>Button times below are observer reaction times, not precise playing-transition times.
@@ -110,39 +141,212 @@
               button-reaction times and were not adjusted from detector predictions.</span></label>
           <p id="reference-status" class="hint" role="status" aria-live="polite"></p>
         </div>
-        <button id="begin" type="button" class="primary wide" hidden disabled>Begin observation</button>
-        <p id="prediction">Detector: waiting for microphone.</p>
-        <label class="meter-label" for="level">Microphone input <span id="level-text">0.0000 RMS</span></label>
-        <meter id="level" min="0" max="0.2" value="0">0</meter>
-        <p id="calibration" class="hint">Calibration: not started.</p>
-        <p id="results" class="result" aria-live="polite"></p>
+        <section aria-labelledby="export-title">
+          <h2 id="export-title">Review &amp; export diagnostic evidence</h2>
+          <p>Diagnostic evidence is not saved automatically. Export before starting another attempt.
+            Reports retain button times, reviewed reference times, detector events and provenance—never audio.
+            Pair timing without independent verification is provisional and cannot pass.</p>
+          <label>Device description<input id="device" type="text" maxlength="300"
+            placeholder="e.g. Pixel 8, built-in microphone" autocomplete="off"></label>
+          <label>Browser / version<input id="browser" type="text" maxlength="600" autocomplete="off"></label>
+          <label>Environment &amp; observer notes<textarea id="environment" rows="3" maxlength="2000"
+            placeholder="Room noise, guitar, distance, observer, and any protocol deviations"></textarea></label>
+          <label class="check"><input id="reviewed" type="checkbox">
+            <span>I reviewed this device/browser context and the protocol used.</span></label>
+          <button id="export" type="button" class="primary" disabled>Download JSON report</button>
+          <p id="export-status" role="status"></p>
+          <details><summary>Effective capture settings</summary><pre id="settings">Not available until capture starts.</pre></details>
+          <details><summary>Detector parameters &amp; gate</summary>
+            <pre id="parameters"></pre>
+            <p>Confidence is an uncalibrated margin-based indicator, not a probability.
+              Every supported pair needs at least 20 actual switches, precision ≥90% and recall ≥80%.
+              Each separate control needs ≥30 seconds with zero detector switches.
+              One passing report is not an overall release gate.</p>
+          </details>
+        </section>
+      </details>
+      </div>
+      <section id="extra-practice" class="panel live" aria-labelledby="extra-title" hidden>
+        <h2 id="extra-title">Learn a chord</h2>
+        <fieldset id="extra-configuration">
+          <legend class="sr-only">Practice options</legend>
+          <label>Chord to hold<select id="extra-chord" aria-label="Chord to hold"></select></label>
+          <div id="rhythm-configuration" hidden>
+            <div class="columns">
+              <label>Tempo (40–160 BPM)<input id="rhythm-bpm" type="number" min="40" max="160" step="1" value="80"></label>
+              <label>Strumming pattern<select id="rhythm-pattern"></select></label>
+            </div>
+            <label class="check"><input id="rhythm-audible" type="checkbox" checked><span>Audio metronome clicks</span></label>
+            <label>Metronome sound
+              <select id="rhythm-sound">
+                <option value="beat">Beat clicks</option>
+                <option value="strums">Strum cues (down low · up high)</option>
+              </select>
+            </label>
+            <label class="check"><input id="rhythm-microphone" type="checkbox"><span>Estimate timing with microphone (optional)</span></label>
+            <div id="rhythm-consent" hidden>
+              <p class="hint">Timing is an uncalibrated estimate. Speaker clicks can be mistaken for strums. Use headphones with audible clicks, or turn the clicks off.</p>
+              <label class="check"><input id="rhythm-headphones" type="checkbox"><span>I am wearing headphones</span></label>
+            </div>
+          </div>
+        </fieldset>
+        <button id="extra-start" class="primary wide" type="button">Start learning · 60 seconds</button>
+        <p id="extra-status" role="status" aria-live="polite"></p>
+        <p id="extra-error" class="error" role="alert" hidden></p>
+        <div class="mode-center">
+          <p id="extra-chord-name" class="chord">A</p>
+          <div id="extra-diagram"></div>
+        </div>
+        <p class="hint diagram-key">Standard tuning · × skip · ○ open · ● fret · low E → high E</p>
+        <div id="coach-controls">
+          <div class="actions"><button id="coach-overall" type="button" aria-pressed="true">Overall chord</button></div>
+          <p class="hint">Or check individual strings: pluck only the selected string. Muted strings are skipped. Selection never advances automatically.</p>
+          <div id="coach-strings" class="string-controls" role="group" aria-label="Individual physical string checks"></div>
+          <p id="coach-target" class="instruction"></p>
+          <h3 id="coach-quality" class="encouragement" aria-live="polite">Ready for your first strum?</h3>
+          <p id="coach-tip"></p>
+          <p id="coach-counts" class="hint"></p>
+          <p class="hint">Overall feedback checks chord pitch evidence—not every string, fret buzz, muting or tone quality. A pitch match cannot prove which physical string sounded. These are tips, not a clean-chord certificate.</p>
+        </div>
+        <div id="rhythm-controls" hidden>
+          <p class="instruction">Keep one chord held. ↓ D = down · ↑ U = up · — = rest. First bar is your count-in.</p>
+          <div id="rhythm-slots" class="rhythm-slots" aria-label="Strumming pattern counts and directions"></div>
+          <p id="rhythm-position" role="status"></p>
+          <p id="rhythm-timing" class="result"></p>
+          <p class="hint">Arrows are instructions, not detected directions. Microphone timing cannot judge hand direction or chord accuracy.</p>
+        </div>
+        <div class="mode-timer">
+          <span class="stat"><span id="extra-countdown">60</span><span class="unit"> s</span></span>
+          <progress id="extra-progress" max="60000" value="0" aria-label="Practice progress"></progress>
+        </div>
+        <div class="actions secondary-actions">
+          <button id="extra-reset" type="button" disabled>Stop &amp; reset</button>
+          <button id="extra-finish" type="button" disabled>End round</button>
+        </div>
+        <p class="hint privacy-note">Local only. No recordings or uploads. Guided strumming needs no microphone. Hiding or leaving this page discards an unfinished round; it never resumes automatically.</p>
       </section>
+      <section id="progression-practice" class="panel live" aria-labelledby="progression-title" hidden>
+        <h2 id="progression-title">Play along</h2>
+        <p class="hint">Follow the chord prompts and rhythm. Chord changes and stroke direction are not detected.</p>
+        <fieldset id="progression-configuration">
+          <legend class="sr-only">Play-along options</legend>
+          <label>Sequence preset
+            <select id="progression-preset">
+              <option value="first">First changes · Em – Am</option>
+              <option value="three">Three-chord groove · G – C – D</option>
+              <option value="four">Four-chord flow · G – D – Em – C</option>
+              <option value="minor">Minor mood · Am – F – C – G (F barre challenge)</option>
+              <option value="custom">Custom sequence</option>
+            </select>
+          </label>
+          <div id="progression-editor" class="progression-editor"></div>
+          <button id="progression-add" type="button">Add chord</button>
+          <p id="progression-preview" class="hint"></p>
+          <div class="columns">
+            <label>Tempo (40–160 BPM)<input id="progression-bpm" type="number" min="40" max="160" step="any" value="80"></label>
+            <label>Bars per chord (1–4)<input id="progression-bars" type="number" min="1" max="4" step="1" value="1"></label>
+            <label>Loops (1–8)<input id="progression-loops" type="number" min="1" max="8" step="1" value="2"></label>
+            <label>Strumming pattern<select id="progression-pattern"></select></label>
+          </div>
+          <label class="check"><input id="progression-audible" type="checkbox" checked><span>Audio metronome clicks</span></label>
+          <label>Metronome sound<select id="progression-sound">
+            <option value="beat">Beat clicks</option>
+            <option value="strums">Strum cues (down low · up high)</option>
+          </select></label>
+          <label class="check"><input id="progression-microphone" type="checkbox"><span>Estimate timing with microphone (optional)</span></label>
+          <div id="progression-consent" hidden>
+            <p class="hint">Timing is uncalibrated. Speaker clicks can be mistaken for strums. Use headphones or mute clicks.</p>
+            <label class="check"><input id="progression-headphones" type="checkbox"><span>I am wearing headphones</span></label>
+          </div>
+        </fieldset>
+        <button id="progression-start" class="primary wide" type="button">Start play-along</button>
+        <p id="progression-error" class="error" role="alert" hidden></p>
+        <p id="progression-status" role="status" aria-live="polite"></p>
+        <div id="progression-sequence" class="progression-sequence" aria-label="Chord sequence"></div>
+        <div class="chord-grid">
+          <div><p class="eyebrow">CURRENT CHORD</p><p id="progression-current" class="chord"></p><div id="progression-current-diagram"></div></div>
+          <div><p class="eyebrow">UP NEXT</p><p id="progression-next" class="chord accent"></p><div id="progression-next-diagram"></div></div>
+        </div>
+        <p class="hint diagram-key">Standard tuning · × skip · ○ open · ● fret · low E → high E</p>
+        <p id="progression-position" class="instruction"></p>
+        <div id="progression-slots" class="rhythm-slots" aria-label="Strumming pattern counts and directions"></div>
+        <p id="progression-timing" class="hint"></p>
+        <div class="mode-timer">
+          <span class="stat"><span id="progression-countdown">0</span><span class="unit"> s</span></span>
+          <progress id="progression-progress" max="1" value="0" aria-label="Play-along progress"></progress>
+        </div>
+        <div class="actions secondary-actions">
+          <button id="progression-reset" type="button" disabled>Stop &amp; reset</button>
+          <button id="progression-finish" type="button" disabled>End play-along</button>
+        </div>
+        <p class="hint privacy-note">Local only. No recordings or uploads. Guided play needs no microphone. Hiding or leaving discards an unfinished play-along.</p>
+      </section>
+      </div>
 
-      <section class="panel" aria-labelledby="export-title">
-        <h2 id="export-title"><span class="step">03</span> Review &amp; export</h2>
-        <p>Nothing is saved automatically. Export before starting another attempt.
-          Reports retain raw button times, reviewed reference times, detector events, and provenance—never audio.
-          Pair timing without independent verification is provisional and cannot pass.</p>
-        <label>Device description<input id="device" type="text" maxlength="300"
-          placeholder="e.g. Pixel 8, built-in microphone" autocomplete="off"></label>
-        <label>Browser / version<input id="browser" type="text" maxlength="600" autocomplete="off"></label>
-        <label>Environment &amp; observer notes<textarea id="environment" rows="3" maxlength="2000"
-          placeholder="Room noise, guitar, distance, observer, and any protocol deviations"></textarea></label>
-        <label class="check"><input id="reviewed" type="checkbox">
-          <span>I reviewed this device/browser context and the protocol used.</span></label>
-        <button id="export" type="button" class="primary" disabled>Download JSON report</button>
-        <p id="export-status" role="status"></p>
-        <details><summary>Effective capture settings</summary><pre id="settings">Not available until capture starts.</pre></details>
-        <details><summary>Detector parameters &amp; gate</summary>
-          <pre id="parameters"></pre>
-          <p>Confidence is an uncalibrated margin-based indicator, not a probability.
-            Every one of 28 pairs needs at least 20 actual switches, precision ≥90% and recall ≥80%.
-            Each separate control needs ≥30 seconds with zero detector switches.
-            One passing report is not an overall release gate.</p>
-        </details>
+      <section id="history-page" class="panel" aria-labelledby="history-title" hidden>
+        <div class="section-head">
+          <h2 id="history-title">Your practice history</h2>
+          <button id="history-refresh" type="button">Refresh history</button>
+        </div>
+        <p id="history-mode-totals" class="hint"></p>
+        <p class="hint">Finished practice rounds save automatically on this device, including early finishes.
+          Reset, interrupted and diagnostic attempts do not. Switches are microphone estimates, not accuracy scores.</p>
+        <p id="history-read-error" class="error" role="alert" hidden></p>
+        <div class="stats history-totals" aria-label="Practice totals">
+          <div><span id="history-total-rounds" class="stat">—</span><span>rounds</span></div>
+          <div><span id="history-total-time" class="stat">—</span><span>active practice time</span></div>
+          <div><span id="history-total-switches" class="stat">—</span><span>confirmed switches</span></div>
+          <div><span id="history-total-days" class="stat">—</span><span>practice days (UTC)</span></div>
+        </div>
+        <p id="history-empty" class="hint" hidden>No rounds saved yet. Play a round, or import a backup from another device.</p>
+        <h3>Progress by chord pair</h3>
+        <p class="hint">Best and latest change compare actual full 60-second rounds only; early rounds are never scaled to a minute.</p>
+        <div id="history-pairs"></div>
+        <h3>Recent rounds</h3>
+        <p class="hint">Expand a round for details. Dates above the details use your device’s local time.</p>
+        <div id="history-rounds"></div>
+        <p id="history-page-count" class="hint"></p>
+        <button id="history-more" type="button" hidden>Show 20 more rounds</button>
+        <section class="history-transfer" aria-labelledby="history-transfer-title">
+          <h3 id="history-transfer-title">Take your progress with you</h3>
+          <p>History is local to this browser and device—no account, server sync or audio.
+            Clearing browser data or browser storage eviction can erase it. Download a backup regularly,
+            move that JSON file to your other device, then select it here.</p>
+          <p class="hint">Version 2 backups (also imports version 1) · up to 5 MiB and 10,000 records.
+            Identical records are skipped; conflicting IDs stop the entire import without overwriting anything.</p>
+          <button id="history-export" type="button">Download history JSON</button>
+          <label class="history-file-label">Import history JSON
+            <input id="history-file" type="file" accept=".json,application/json">
+          </label>
+          <p id="history-transfer-status" role="status" aria-live="polite"></p>
+          <p id="history-transfer-error" class="error" role="alert" hidden></p>
+          <div id="history-preview" class="observer" hidden>
+            <h4>Confirm local merge</h4>
+            <p id="history-preview-text"></p>
+            <p class="hint">Nothing changes until you confirm. The merge checks current storage again, including changes made in other tabs.</p>
+            <div class="actions">
+              <button id="history-confirm" class="primary" type="button">Confirm merge</button>
+              <button id="history-cancel" type="button">Cancel import</button>
+            </div>
+          </div>
+        </section>
       </section>
-      <footer>Leaving or hiding this page releases the microphone and discards an active attempt.
-        Returning never resumes capture. Offline app shell only; no accounts or history.</footer>
+      <footer class="panel" aria-labelledby="offline-title">
+        <h2 id="offline-title">Keep the music handy</h2>
+        <p id="offline-status" role="status" aria-live="polite">Checking offline support…</p>
+        <p id="network-status" class="hint"></p>
+        <p id="install-status" class="hint">Install from your browser menu.</p>
+        <p id="update-status" class="hint" role="status" aria-live="polite"></p>
+        <div class="actions">
+          <button id="install-app" type="button" disabled>Install app</button>
+          <button id="apply-update" type="button" disabled>Apply update &amp; reload</button>
+        </div>
+        <p class="hint">Updates never reload automatically. Export any report and check your Downloads
+          first: applying an update discards this page’s unsaved report and edits.
+          Apply update is available only when an update is waiting and this attempt is idle or finished.
+          Close other app tabs/windows before applying. Paused attempts must be finished first.
+          Pending saves and retryable unsaved rounds also block updates. History is device-only; no accounts or server sync.</p>
+      </footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

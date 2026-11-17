@@ -26,7 +26,7 @@ export function offlinePlugin() {
       this.emitFile({
         type: 'asset', fileName: 'manifest.webmanifest',
         source: JSON.stringify({
-          id: base, name: 'Open chord lab · Guitar practice', short_name: 'Chord lab',
+          id: base, name: 'Chord Play · Guitar practice', short_name: 'Chord Play',
           description: 'Local open-chord microphone validation. No audio saved or uploaded.',
           start_url: base, scope: base, display: 'standalone',
           background_color: '#111d2b', theme_color: '#111d2b',

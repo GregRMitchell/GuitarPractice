@@ -51,21 +51,22 @@ type Reply = {
   calibration?: { status: string; remainingMs: number; noiseFloorRms?: number };
   observation?: { atMs: number; chord: string | null };
   message?: string;
+  analysis?: { features: { pitchClassEnergies: readonly number[] }; pitch: { frequency: number } | null; clipped: boolean };
 };
 
 async function analysisWorker(): Promise<{
   replies: Reply[];
-  send: (id: number, atMs: number, samples?: Float32Array) => Reply;
+  send: (id: number, atMs: number, samples?: Float32Array, includeAnalysis?: boolean) => Reply;
 }> {
   const replies: Reply[] = [];
   vi.stubGlobal('postMessage', (reply: Reply): void => { replies.push(reply); });
   vi.stubGlobal('onmessage', null);
   await import('../src/audio/analysis.worker');
   expect(replies[0]).toEqual({ type: 'ready' });
-  const send = (id: number, atMs: number, samples: Float32Array = new Float32Array(8192)): Reply => {
+  const send = (id: number, atMs: number, samples: Float32Array = new Float32Array(8192), includeAnalysis = false): Reply => {
     const endpoint = globalThis as unknown as { onmessage: (event: MessageEvent) => void };
     endpoint.onmessage({ data: {
-      type: 'analyze', pair: ['E', 'Em'], atMs,
+      type: 'analyze', pair: ['E', 'Em'], atMs, includeAnalysis,
       frame: { type: 'frame', id, audioTime: atMs / 1000, sampleRate: 8192, samples },
     } } as MessageEvent);
     return replies[replies.length - 1];
@@ -79,12 +80,25 @@ test('real worker requires two seconds of contiguous quiet calibration and appli
   expect(send(1, 1000, noise)).toMatchObject({
     type: 'result', calibration: { status: 'calibrating', remainingMs: 1000 },
   });
+
   expect(send(2, 1500, noise).observation).toBeUndefined();
   const ready = send(3, 2000, noise);
   expect(ready.calibration?.status).toBe('ready');
   expect(ready.calibration?.noiseFloorRms).toBeCloseTo(0.002);
   expect(ready.observation).toBeUndefined();
   expect(send(4, 2500, noise).observation).toEqual({ atMs: 2500, chord: null, confidence: 0 });
+});
+
+test('worker returns local summaries only when requested after calibration, never PCM', async () => {
+  const { send } = await analysisWorker();
+  send(1, 1000);
+  expect(send(2, 2000, undefined, true).analysis).toBeUndefined();
+  const note = Float32Array.from({ length: 8192 }, (_, index) => 0.2 * Math.sin(2 * Math.PI * 110 * index / 8192));
+  expect(send(3, 2500, note).analysis).toBeUndefined();
+  const reply = send(4, 3000, note, true);
+  expect(reply.analysis?.pitch?.frequency).toBeCloseTo(110, 0);
+  expect(reply.analysis?.features.pitchClassEnergies).toHaveLength(12);
+  expect(JSON.stringify(reply)).not.toContain('samples');
 });
 
 test('worker restarts calibration on missing audio rather than counting interrupted wall time', async () => {

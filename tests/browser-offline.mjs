@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { readFile, readdir, mkdir, rm } from 'node:fs/promises';
+import { readFile, readdir, mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
+import { checkHistory } from './browser-history.mjs';
+import { checkModes } from './browser-modes.mjs';
+import { checkProgressions } from './browser-progressions.mjs';
 
 // Optional real-browser verification using an existing Edge installation, with no dependencies.
 const directory = resolve('.offline-check');
@@ -143,6 +146,67 @@ try {
     }
   };
   await ready(page);
+  const checkPracticeScreen = async (width, height) => {
+    await page.send('Emulation.setDeviceMetricsOverride', {
+      width, height, deviceScaleFactor: 1, mobile: width < 600,
+    });
+    const layout = await page.evaluate(`(() => {
+      const start = document.getElementById('start');
+      const advanced = document.getElementById('advanced');
+      const diagrams = [...document.querySelectorAll('.chord-diagram')];
+      return {
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        startVisible: start.getBoundingClientRect().bottom < innerHeight && !start.disabled,
+        title: document.title, advancedOpen: advanced.open,
+        diagrams: diagrams.map(svg => svg.getAttribute('aria-label')),
+        installationLast: document.getElementById('offline-title').closest('footer') === document.querySelector('main').lastElementChild,
+        duplicateIds: [...document.querySelectorAll('[id]')].map(node => node.id)
+          .filter((id, index, ids) => ids.indexOf(id) !== index),
+      };
+    })()`);
+    assert.equal(layout.overflow, false, `${width}px has no horizontal overflow`);
+    assert.equal(layout.startVisible, true, `${width}px Start is immediately usable`);
+    assert.equal(layout.advancedOpen, false);
+    assert.equal(layout.installationLast, true);
+    assert.deepEqual(layout.duplicateIds, []);
+    assert.match(layout.title, /Chord Play/);
+    assert.equal(layout.diagrams.length, 2);
+    assert.match(layout.diagrams[0], /A chord.*low E muted.*A open.*high E open/);
+    if (process.env.PRACTICE_SCREENSHOTS) {
+      const screenshot = await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+      await writeFile(resolve(process.env.PRACTICE_SCREENSHOTS, `practice-${width}.png`),
+        Buffer.from(screenshot.data, 'base64'));
+    }
+  };
+  await checkPracticeScreen(1280, 960);
+  await checkPracticeScreen(390, 844);
+  await checkPracticeScreen(320, 740);
+  await page.evaluate(`document.getElementById('first').value = 'G';
+    document.getElementById('first').dispatchEvent(new Event('change'));`);
+  assert.match(await page.evaluate(`document.querySelector('#current-diagram svg').getAttribute('aria-label')`),
+    /G chord.*low E fret 3.*B open.*high E fret 3/);
+  for (const [chord, description, x1, y] of [
+    ['F', /barre fret 1 from low E to high E/, '25', '43'],
+    ['Bm', /barre fret 2 from A to high E/, '47', '69'],
+  ]) {
+    const diagram = await page.evaluate(`(() => {
+      const first = document.getElementById('first');
+      first.value = '${chord}'; first.dispatchEvent(new Event('change'));
+      const svg = document.querySelector('#current-diagram svg');
+      const barre = svg.querySelector('.barre');
+      return { label: svg.getAttribute('aria-label'), x1: barre?.getAttribute('x1'),
+        x2: barre?.getAttribute('x2'), y: barre?.getAttribute('y1'),
+        overflow: document.documentElement.scrollWidth > innerWidth };
+    })()`);
+    assert.match(diagram.label, description);
+    assert.deepEqual([diagram.x1, diagram.x2, diagram.y, diagram.overflow], [x1, '135', y, false]);
+  }
+  await page.evaluate(`document.getElementById('first').value = 'A';
+    document.getElementById('first').dispatchEvent(new Event('change'));
+    document.getElementById('advanced').open = true;`);
+  assert.equal(await page.evaluate(`document.getElementById('mode').getBoundingClientRect().height >= 44`), true);
+  await page.evaluate(`document.getElementById('advanced').open = false;`);
+  console.log('PASS practice screens: desktop / 390px / 320px, accessible diagrams, immediate Start, collapsed Advanced, installation last');
   const manifest = await page.send('Page.getAppManifest');
   assert.equal(manifest.errors.length, 0);
   const data = JSON.parse(manifest.data);
@@ -165,6 +229,7 @@ try {
     })()`);
     assert(assets.some((url) => url.includes('analysis.worker')));
     assert(assets.some((url) => url.includes('capture.worklet')));
+    assert(assets.some((url) => url.includes('onset.worklet')));
     assert(assets.some((url) => url.endsWith('.css')));
     assert(assets.some((url) => url.endsWith('manifest.webmanifest')));
     assert(assets.filter((url) => url.includes('/icons/')).length === 2);
@@ -184,6 +249,7 @@ try {
       });
       const context = new AudioContext();
       await context.audioWorklet.addModule(assets.find(url => url.includes('capture.worklet')));
+      await context.audioWorklet.addModule(assets.find(url => url.includes('onset.worklet')));
       await context.close();
       try { await fetch('/assets/missing.js'); return false; } catch {}
       return true;
@@ -241,6 +307,42 @@ try {
   await ready(page);
   console.log('PASS updates: wait during startup, active other tab defers, sole finished tab explicitly applies/reloads');
   await checkOffline();
+  const historyServer = createServer(server.listeners('request')[0]);
+  servers.push(historyServer);
+  await new Promise((resolve) => historyServer.listen(0, '127.0.0.1', resolve));
+  const historyId = await checkHistory({
+    page, otherOrigin: `http://127.0.0.1:${historyServer.address().port}`, newTab, until, directory,
+  });
+  await fetch(`${debug}/json/close/${historyId}`);
+  offline = true;
+  await page.send('Page.reload');
+  await until(() => page.evaluate(`document.getElementById('history-total-rounds')?.textContent === '27'`),
+    'offline history hash reload with persisted data');
+  await ready(page);
+  assert.equal(await page.evaluate(`(() => {
+    globalThis.historyNavigationIdentity = {};
+    const identity = globalThis.historyNavigationIdentity;
+    document.getElementById('nav-practice').click();
+    document.getElementById('nav-history').click();
+    return location.hash === '#history' && globalThis.historyNavigationIdentity === identity
+      && !document.getElementById('history-page').hidden;
+  })()`), true);
+  offline = false;
+  console.log('PASS history offline: hash reload retains IndexedDB records; both nav actions stay within the same cached page');
+  const modesServer = createServer(server.listeners('request')[0]);
+  servers.push(modesServer);
+  await new Promise((resolve) => modesServer.listen(0, '127.0.0.1', resolve));
+  const modesId = await checkModes({
+    page, otherOrigin: `http://127.0.0.1:${modesServer.address().port}`, newTab, until,
+  });
+  await fetch(`${debug}/json/close/${modesId}`);
+  const progressionServer = createServer(server.listeners('request')[0]);
+  servers.push(progressionServer);
+  await new Promise((resolve) => progressionServer.listen(0, '127.0.0.1', resolve));
+  const progressionId = await checkProgressions({
+    page, otherOrigin: `http://127.0.0.1:${progressionServer.address().port}`, newTab, until,
+  });
+  await fetch(`${debug}/json/close/${progressionId}`);
 
   // A root worker intentionally owns all root-scope navigation, so use a separate origin.
   const nestedServer = createServer(server.listeners('request')[0]);

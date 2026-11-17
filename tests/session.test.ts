@@ -3,6 +3,47 @@ import type { Capture, CaptureHandlers } from '../src/audio/capture';
 import { createSession } from '../src/session';
 import type { RunMode } from '../src/session';
 
+test.each([60999, 61000, 61100])('practice rejects queued/late sample %i and clamps a late finish to one minute', async (sampleAtMs) => {
+  let now = 1000;
+  let handlers!: CaptureHandlers;
+  const stop = vi.fn(async (): Promise<void> => {});
+  const session = createSession({
+    now: () => now, changed: () => {},
+    startCapture: (_pair, callbacks) => {
+      handlers = callbacks;
+      callbacks.onCalibration({ status: 'ready', remainingMs: 0 });
+      return Promise.resolve({ stop, settings: {}, analysisSampleRate: 48000 });
+    },
+  });
+
+  await session.start({ pair: ['A', 'D'], mode: 'pair', independent: false, durationMs: 60000 });
+  session.begin();
+  for (const [chord, times] of [['A', [1100, 1190, 1280]], ['D', [2000, 2090, 2180]],
+    ['A', [60900, 60990]]] as const) {
+    for (const atMs of times) { now = atMs; handlers.onObservation({ chord, atMs, confidence: 1 }); }
+  }
+  expect(session.snapshot().events).toHaveLength(1);
+  now = 61200;
+  handlers.onObservation({ chord: 'A', atMs: sampleAtMs, confidence: 1 });
+  session.tick();
+  expect(session.snapshot()).toMatchObject({ phase: 'finished', elapsedMs: 60000 });
+  expect(session.snapshot().events).toHaveLength(1);
+  expect(stop).toHaveBeenCalledOnce();
+});
+
+test('a practice capture gap discards the round and never silently restarts after calibration', () => {
+  const h = harness('pair', false);
+  h.session.pause('reset');
+  void h.session.start({ pair: ['A', 'D'], mode: 'pair', independent: false, durationMs: 60000 });
+  h.session.begin();
+  h.observe('A', [100, 200, 300]);
+  h.observe('D', [500, 600, 700]);
+  h.handlers().onCalibration({ status: 'calibrating', remainingMs: 2000 });
+  expect(h.session.snapshot()).toMatchObject({ phase: 'paused', discarded: true, elapsedMs: 0, events: [] });
+  h.handlers().onCalibration({ status: 'ready', remainingMs: 0 });
+  expect(h.session.snapshot().phase).toBe('paused');
+});
+
 function harness(mode: RunMode = 'pair', independent = true): {
   session: ReturnType<typeof createSession>;
   handlers: () => CaptureHandlers;

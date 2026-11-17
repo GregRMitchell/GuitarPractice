@@ -4,7 +4,7 @@ import { CHORDS } from '../chords';
 import type { Pair } from '../chords';
 import type { Observation } from './classify';
 import { CALIBRATION_MS } from './capture-protocol';
-import type { AnalysisReply, AnalysisRequest, AudioFrame, Calibration, FrameAck } from './capture-protocol';
+import type { AnalysisReply, AnalysisRequest, AudioFrame, Calibration, FrameAck, TimedAnalysis } from './capture-protocol';
 
 export type { Calibration } from './capture-protocol';
 
@@ -22,6 +22,8 @@ export interface CaptureHandlers {
   onCalibration(value: Calibration): void;
   /** Shared monotonic milliseconds for labels and observations; default performance.now. */
   readonly now?: () => number;
+  /** Optional fresh local spectral and pitch summaries; raw audio is never returned. */
+  onAnalysis?(value: TimedAnalysis): void;
 }
 
 /** One local-only capture session. No PCM is saved, uploaded, or played back. */
@@ -178,6 +180,9 @@ export async function startCapture(pair: Pair, handlers: CaptureHandlers): Promi
         handlers.onLevel(data.rms);
         if (!active) return;
         handlers.onCalibration(data.calibration);
+        if (active && data.calibration.status === 'ready' && data.analysis && handlers.onAnalysis) {
+          handlers.onAnalysis({ ...data.analysis, atMs });
+        }
         if (active && data.calibration.status === 'ready' && data.observation) {
           handlers.onObservation({ ...data.observation, atMs });
         }
@@ -190,19 +195,31 @@ export async function startCapture(pair: Pair, handlers: CaptureHandlers): Promi
     });
     await ready;
     assertActive();
-    const anchorAudioMs = context.currentTime * 1000;
-    const anchorSessionMs = now();
+    const audioContext = context;
+    let anchorAudioMs = audioContext.currentTime * 1000;
+    let anchorSessionMs = now();
     worklet.port.onmessage = ({ data }: MessageEvent<AudioFrame>): void => {
       if (!active || data.type !== 'frame' || pending) return;
-      const atMs = anchorSessionMs + data.audioTime * 1000 - anchorAudioMs;
-      const ageMs = now() - atMs;
+      let atMs = anchorSessionMs + data.audioTime * 1000 - anchorAudioMs;
+      let ageMs = now() - atMs;
+      const receiptLagMs = audioContext.currentTime * 1000 - data.audioTime * 1000;
+      if (ageMs > MAX_FRAME_AGE_MS && receiptLagMs >= -maxClockLeadMs && receiptLagMs <= MAX_FRAME_AGE_MS) {
+        // The audio clock slipped behind the caller clock (e.g. a device stall), but this
+        // frame is fresh; re-anchor so later frames are not rejected forever. The jump in
+        // atMs makes the worker restart calibration over the discontinuity.
+        anchorAudioMs = audioContext.currentTime * 1000;
+        anchorSessionMs = now();
+        atMs = anchorSessionMs + data.audioTime * 1000 - anchorAudioMs;
+        ageMs = now() - atMs;
+      }
       if (!Number.isFinite(atMs) || atMs < 0 || ageMs < -maxClockLeadMs || ageMs > MAX_FRAME_AGE_MS) {
         ack(data.id);
         return;
       }
       pending = { id: data.id, atMs };
       timer = setTimeout(() => fail(new Error('Audio analysis timed out.')), ANALYSIS_TIMEOUT_MS);
-      const request: AnalysisRequest = { type: 'analyze', frame: data, pair: candidatePair, atMs };
+      const request: AnalysisRequest = { type: 'analyze', frame: data, pair: candidatePair, atMs,
+        ...(handlers.onAnalysis ? { includeAnalysis: true } : {}) };
       try { worker!.postMessage(request, [data.samples.buffer]); }
       catch (error: unknown) { ack(data.id); fail(asError(error)); }
     };
